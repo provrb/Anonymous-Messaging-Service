@@ -1,0 +1,2 @@
+client.c browser.c server.c tools.c main.c interface.c backend.c
+hdr/client.h hdr/browser.h hdr/server.h hdr/tools.h hdr/interface.h hdr/backend.h  -o ../build/main2

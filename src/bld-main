@@ -1,0 +1,7 @@
+hdr/backend.h hdr/browser.h hdr/ccmds.h hdr/ccolors.h hdr/cli.h hdr/client.h hdr/flags.h hdr/root.h hdr/server.h hdr/tools.h
+
+backend.c browser.c ccmds.c cli.c client.c root.c server.c tools.c
+
+main.c
+
+-o ../main
