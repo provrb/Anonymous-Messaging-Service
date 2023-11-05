@@ -186,7 +186,9 @@ bool IsUserHost(
 );
 
 // Receive messages from clients on server
-void* ServerRecvThread(void* serverInfo);
+void* ServerRecvThread(
+    void* serverInfo
+);
 
 // Close a server and close all the client sockets connected to it
 void ShutdownServer(

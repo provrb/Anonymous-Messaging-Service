@@ -132,9 +132,36 @@ int DisplayCommands() {
 }
 
 int Chatroom(Server* server) {
-    printf("%s:msg> ", client->handle); // message prompt with username
-    
 
+    // Clear previous terminal output
+#ifdef _WIN64
+    system("cls")
+#elif __linux__
+    system("clear");
+#endif
+    
+    // Create thread to print other client messages to the screen
+    pthread_t tid;
+    if (pthread_create(&tid, NULL, RecvClientMessages, (void*)server) < 0) {
+        printf("Internal server error. Aborting.\n");
+        return -1;
+    }
+
+    // Send messages
+    bool sentMessage = false;
+    while (1)
+    {
+        char* message[MAX_MSG_LEN + 1];
+        printf("%s:msg> ", client->handle); // message prompt with username
+        scanf("%500s", &message);
+
+        if (strlen(message) < 0)
+            continue;
+
+        RelayClientSentMessage(server, message, client);
+    }
+
+    return 0;
 }
 
 /**

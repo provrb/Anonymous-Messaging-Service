@@ -39,11 +39,21 @@ void RecvClientMessages(void* serverInfo)
         if (receivedBytes <= 0)
             continue;
 
-        if (receivedCMessage.cflag == cf_RECV_CLIENT_SENT_MESSAGE)
+        switch (receivedCMessage.cflag)
+        {
+        case cf_RECV_CLIENT_SENT_MESSAGE:
             printf("%s: %s\n", receivedCMessage.sender->handle, receivedCMessage.message);
-        else
-            continue;
+            break;
+ 
+        // TODO: Handle situation
+        case cf_KICK_CLIENT_FROM_SERVER:
+        case cf_BAN_CLIENT_FROM_SERVER:
+            break;
+        default:
+            break;
+        }
     }
+    pthread_exit(NULL);
 }
 
 /**

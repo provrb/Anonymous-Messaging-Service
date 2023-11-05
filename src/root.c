@@ -39,7 +39,10 @@ rcodes DoRequest(void* req)
 
         // First send the amount of online servers as an int
         uint32_t nlOnlineServers = htonl(onlineServers); // htonl version of onlineServers int
-        send(request.user.rfd, &nlOnlineServers, sizeof(nlOnlineServers), 0);
+        
+        int sentBytes = send(request.user.rfd, &nlOnlineServers, sizeof(nlOnlineServers), 0);
+        if (sentBytes <= 0)
+            SysPrint(RED, true, "Error sending online servers int. Errno %i", errno);
 
         // After prepare and send all the servers from the list individually
         for (int servIndex=0; servIndex<onlineServers; servIndex++)
@@ -420,4 +423,27 @@ int CreateRootServer() {
 void ClientJoinedRoot() {
     ChooseClientHandle();
     UI();
+}
+
+void DisconnectClientFromServer(User* user) {
+    if (user->connectedServer->online)
+    {
+        // get index of client in server client list
+        int index = -1;
+        for (int i=0; i < user->connectedServer->connectedClients; i++){
+            if (strcmp(user->connectedServer->clientList[i]->handle, user->handle) == 0) // Server exists in the list
+                index = i;
+        }            
+
+        // shift array to remove client from clientlist
+        for(int b=index; b < user->connectedServer->connectedClients - 1; b++) 
+            user->connectedServer->clientList[b] = user->connectedServer->clientList[b + 1]; 
+
+        user->connectedServer->connectedClients--;
+
+        close(client->cfd);
+
+        if (IsUserHost(user, user->connectedServer))
+            ShutdownServer(user->connectedServer->alias);
+    }
 }

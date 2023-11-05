@@ -159,7 +159,6 @@ CommandFunction* JoinServerByName(void* name){ // Join server from its alias
         return NULL;
     }
 
-    printf("dbg: Server sfd %i server name %s\n", server->sfd, server->alias);
     int cfd = socket(server->domain, server->type, server->protocol);
     if (cfd < 0){
         SysPrint(RED, true, "Failed to create client socket. Errno %i", errno);
@@ -173,6 +172,8 @@ CommandFunction* JoinServerByName(void* name){ // Join server from its alias
 
     client->cfd = cfd;
     client->connectedServer = server;
+
+    Chatroom(client->connectedServer);
 
     return NULL;
 }
