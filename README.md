@@ -29,3 +29,6 @@ An unbreakable bt brute-force encryption method used by the NSA and the US milit
 - Major code cleanup
   - Organized code into respective header files
 - Optimization
+
+## v1.0.2
+- Remove data flags. Old way to tell what information was being sent to the root server
