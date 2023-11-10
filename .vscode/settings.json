@@ -3,7 +3,8 @@
     "client.h": "c",
     "server.h": "c",
     "root.h": "c",
-    "tools.h": "c"
+    "tools.h": "c",
+    "browser.h": "c"
   },
   "C_Cpp_Runner.cCompilerPath": "gcc",
   "C_Cpp_Runner.cppCompilerPath": "g++",
