@@ -32,11 +32,10 @@ Server* ServerFromAlias(char* alias);
 
 // Make a request TO the root server
 RootResponse MakeRootRequest(
-    cflags    commandFlag,
-    dflags    dataFlag,
+    CommandFlag    commandFlag,
     Server    currentServer,
     User      relatedClient, 
-    CMessage* clientMessageInfo
+    CMessage clientMessageInfo
 ); 
 
 CommandFunction ExitApp();
@@ -58,6 +57,7 @@ CommandFunction EnableDebugMode();
  * Used with commands and arguements.
  * 
  */
+void             JoinServer(Server* server); // Join a server from struct
 CommandFunction* JoinServerByName(void* name); // Join server from its alias
 CommandFunction* JoinServerByListIndex(int index); // Join server from index in the server list
 

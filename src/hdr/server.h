@@ -36,32 +36,15 @@
 #include "ccolors.h"
 #include "flags.h"
 #include "../ext/aes.h"
+#include "min_max_values.h"
 
 // Debug mode. Allows for more printing
 extern bool DEBUG;
 
-// SERVER STATUSES
-#define SERVER_FAILURE -3
-#define SERVER_CREATED 9
-
-// Max
-#define NO_MORE_THAN    100 // Can't set a servers maxClient more than this
-#define MAX_ALIAS_LEN   32  // Max server name length in chars
-#define MAX_USRNAME_LEN 20 // Max client user name length in chars
-#define MAX_MSG_LEN     500 // Max msg length in chars
-#define MAX_ROOT_CLIENTS 1000 // Max allowed clients connected to app
-#define MAX_ALLOWED_SERVERS 30 // Max allowed servers online
-
-// Min
-#define MIN_ALIAS_LEN   3
-#define MIN_USRNAME_LEN 3
-
-// Print only if debug is true
-#define DEBUG_PRINT(str) \
-  if (DEBUG == true)             \
-    fprintf(stderr, "[%s:%d]: %s\n", __FILE__, __LINE__, str);
-
+// Structure representing a server
 struct ServerStr; // To put it in UserStr before ServerStr is defined
+
+// Structure representing a client connected
 struct UserStr;   // So UserStr can be compiled if it it used before defined
 
 /**
@@ -70,13 +53,12 @@ struct UserStr;   // So UserStr can be compiled if it it used before defined
  * @param[in]       str: String to print
  * @param[in]       ...: Formatting
  */
-static void SERVER_PRINT(const char* color, const char* str, ...);
+void SERVER_PRINT(const char* color, const char* str, ...);
 
 // Information about a user
 typedef struct UserStr
 {
-    dflags            dflag; // data_flag. See flags.h
-    char              handle[MAX_USRNAME_LEN + 1]; // Username
+    char              handle[kMaxClientHandleLength + 1]; // Username
     struct tm*        joined; // Time joined chatroom | GMT Time
     unsigned int      cfd;    // User File Descriptor (Socket)
     struct sockaddr_in caddr;  // Client address info
@@ -88,7 +70,6 @@ typedef struct UserStr
 // Information about a server
 typedef struct ServerStr 
 {
-    dflags             dflag; // data_flag. See flags.h
     int                sfd; // Socket File Descriptor
     int                domain;
     int                type;
@@ -98,7 +79,7 @@ typedef struct ServerStr
     unsigned int       maxClients; // Max clients allowed to connect
     struct sockaddr_in addr; // address struct with info on the server address
     bool               online; // boolean
-    char               alias[MAX_ALIAS_LEN + 1]; // used to connect to server without ip
+    char               alias[kMaxServerAliasLength + 1]; // used to connect to server without ip
     bool               isRoot; // if the connected server is the root server
     User*              host; // Client who requested for server to be created
 
@@ -106,46 +87,47 @@ typedef struct ServerStr
 } Server;
 
 // Info to create a server with
+// Includes the client info of the host
 typedef struct ServerCreationData
 {
-    User* clientAKAhost; // Host of the server. The person who requested to create the server
+    User*   clientAKAhost; // Host of the server. The person who requested to create the server
     Server* serverInfo; // Info of the server to be used when creating
 } ServerCreationInfo;
 
 // Information about a client sent message
 typedef struct ClientMessage
 {
-    dflags dflag; // data_flag. See flags.h
-    cflags cflag; // what to do with the message
-    User*  sender; // Client who sent the message
-    char   message[MAX_MSG_LEN + 1];
+    CommandFlag cflag; // what to do with the message
+    User*       sender; // Client who sent the message
+    char        message[kMaxClientMessageLength + 1];
 } CMessage;
 
 // A struct with information to send the root server
 // to perform a request
-typedef struct CommonRecv
+typedef struct ServerRequest
 {
-    dflags dflag;
-    cflags cmdFlag; // What command to tell root server to perform
-    User user;
-    Server server;
-    CMessage clientSentMessage; // A message sent by client. empty string if no message. ENCRYPTED
+    CommandFlag cmdFlag; // What command to tell root server to perform
+    User        user;
+    Server      server;
+    CMessage    clientSentMessage; // A message sent by client. empty string if no message. ENCRYPTED
 } RootRequest;
 
 // Struct describing the result of making a root request
 // Gives information on the operation- did it succeed.
 typedef struct Response
 {
-    rflags rflag; // Response flags, tell the client what to do or what has been done
-    rcodes rcode; // Response code/status code. Tell if the operation succeeded
+    ResponseFlag rflag; // Response flags, tell the client what to do or what has been done
+    ResponseCode rcode; // Response code/status code. Tell if the operation succeeded
     void*  returnValue; // Expect returned thing from making the root request like a server list
 } RootResponse;
 
+
+// Global variables
 extern User*  client; // Client struct
-extern bool   goodUsername; // Client username follows all rules
-extern int    onlineWWClients; // online world-wide clients
+extern int    onlineGlobalClients; // online world-wide clients
 extern User   rootConnectedClients[]; // clients connected to the root server
-extern Server rootServer; // Root server information
+extern Server rootServer; // Root server that holds all servers and handles all client connections
+
 
 // Allocate memory for the client so its usable. No segmentation faults
 void MallocClient();

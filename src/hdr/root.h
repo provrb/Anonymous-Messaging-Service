@@ -22,9 +22,10 @@
 
 #define ROOT_PORT 18081 // Port the root server is running on
 
-rcodes DoRequest(void* request);
+ResponseCode DoRequest(void* request);
 
 void* AcceptClientRoot();
+
 void* RecvClientRoot(void* usr);
 
 // Create root server all clients connect to
@@ -36,7 +37,15 @@ int ConnectToRootServer(); // Root server will always be on port 43832
 // A client joined the root server
 void ClientJoinedRoot();
 
-// Disconnect the client server-sided
-void DisconnectClientRoot(); 
+void DisconnectClientFromRootServer(User* user); 
 
+void DisconnectClientFromServer(User* user);
+
+// Respond to a clients request
 void Respond(User* to, RootResponse response);
+
+// Update a client info in the connected server
+void UpdateClientInConnectedServer(User* userToUpdate);
+
+// Update a server in serverList with new info/the updated Server struct
+void UpdateServerWithNewInfo(Server* server);

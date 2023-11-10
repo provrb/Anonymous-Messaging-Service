@@ -45,31 +45,28 @@ Server* ServerFromAlias(char* alias) {
 /**
  * @brief           Make a request from the client to the root server. Kind of like http
  * @param[in]       commandFlag:   tell the server what to do with the data
- * @param[in]       dataFlag:      ensure the server knows which data is being passed
  * @param[in]       currentServer: server to make the request from
  * @param[in]       relatedClient: client who made the request
  * @return          void*
  * @retval          RootResponse from server as void*
  */
 RootResponse MakeRootRequest(
-    cflags    commandFlag,
-    dflags    dataFlag,
+    CommandFlag    commandFlag,
     Server    currentServer,
     User      relatedClient,
-    CMessage* clientMessageInfo
+    CMessage clientMessageInfo
 )
 {
     RootRequest request;
     request.cmdFlag           = commandFlag;
-    request.dflag             = dataFlag;
     request.server            = currentServer;
     request.user              = relatedClient;
-    request.clientSentMessage = (clientMessageInfo == NULL ? (CMessage){0} : *clientMessageInfo);
+    request.clientSentMessage = clientMessageInfo;
 
     // Default response values
     RootResponse response = {0};
-    response.rcode        = rc_INTERNAL_SERVER_ERROR;
-    response.rflag        = rf_NONE;
+    response.rcode        = k_rcInternalServerError;
+    response.rflag        = k_rfNoResponse;
     response.returnValue  = NULL;
 
     // Send request to root server
@@ -80,7 +77,7 @@ RootResponse MakeRootRequest(
     }
 
     // Client wont be able to receive messages when their socket file descriptor is closed
-    if (request.cmdFlag == cf_DISCONNECT_CLIENT_FROM_ROOT)
+    if (request.cmdFlag == k_cfDisconnectClientFromRoot)
         return response;
 
     // Receive a response from the root server
@@ -94,7 +91,7 @@ RootResponse MakeRootRequest(
     // where we may need to send or recv more than once
     switch (request.cmdFlag)
     {
-    case cf_REQUEST_SERVER_LIST: // Need to receive all servers individually
+    case k_cfRequestServerList: // Need to receive all servers individually
     {
         // Receive the number of online servers
         uint32_t onlineServersTemp = 0;
@@ -152,13 +149,7 @@ CommandFunction ExitApp(){
  * Used with commands and arguements.
  * 
  */
-CommandFunction* JoinServerByName(void* name){ // Join server from its alias
-    Server* server = ServerFromAlias((char*)name);
-    if (!server){
-        SysPrint(RED, true, "No Server Found With That Name.");
-        return NULL;
-    }
-
+void JoinServer(Server* server) {
     int cfd = socket(server->domain, server->type, server->protocol);
     if (cfd < 0){
         SysPrint(RED, true, "Failed to create client socket. Errno %i", errno);
@@ -168,21 +159,41 @@ CommandFunction* JoinServerByName(void* name){ // Join server from its alias
     int cnct = connect(cfd, (struct sockaddr*)&server->addr, sizeof(server->addr));
     if (cnct < 0){
         SysPrint(RED, true, "Failed to Connect to Server. Error %i", errno);
+        return NULL;
     }
 
+    client->caddr = server->addr;
     client->cfd = cfd;
     client->connectedServer = server;
 
     Chatroom(client->connectedServer);
-
-    return NULL;
 }
 
-CommandFunction MakeServerCL() {
+CommandFunction* JoinServerByName(void* name){ // Join server from its alias
+    UpdateServerList();
+    Server* server = ServerFromAlias((char*)name);
+    if (!server) { // ServerFromAlias returns null if no server is found
+        SysPrint(RED, true, "No Server Found With That Name.");
+        return NULL;
+    }
 
+    JoinServer(server);
 }
 
 CommandFunction* JoinServerByListIndex(int index) {
 
+    // Check if its a valid index
+    // Less than 0
+    if (index < 0)
+        return NULL;
+
+    // Greater than the amount of servers online
+    if (index >= onlineServers)
+        return NULL;
+
+    // Valid index, join server
+    Server* server = &serverList[index];
+    JoinServer(server);
 }
+
 

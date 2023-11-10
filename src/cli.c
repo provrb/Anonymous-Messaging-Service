@@ -86,15 +86,11 @@ int SplashScreen() {
  */
 int DisplayServers() {
 
-    // Make request to servers for server list
-    RootResponse returnInfo = MakeRootRequest(cf_REQUEST_SERVER_LIST, df_NONE, rootServer, *client, NULL); // Request server list
-
-    if (returnInfo.rcode != rc_SUCCESSFUL_OPERATION) 
-        return -1;
+    UpdateServerList();
 
     // Print server list header
-    SysPrint(UNDR WHT, true, "> Server List (%i Online):", onlineServers);
-    printf("\t[ID] : [USR/COUNT] : SERVER NAME\n");
+    SysPrint(UNDR WHT, true, "Server List (%i Online):", onlineServers);
+    printf("  [ID] - [USR/COUNT] : SERVER NAME\n");
 
     // Print Server List
     for (int servIndex=0; servIndex<onlineServers; servIndex++){
@@ -140,6 +136,8 @@ int Chatroom(Server* server) {
     system("clear");
 #endif
     
+    SERVER_PRINT(CYN, "You are now connected to '%s'\n", server->alias);
+
     // Create thread to print other client messages to the screen
     pthread_t tid;
     if (pthread_create(&tid, NULL, RecvClientMessages, (void*)server) < 0) {
@@ -151,16 +149,31 @@ int Chatroom(Server* server) {
     bool sentMessage = false;
     while (1)
     {
-        char* message[MAX_MSG_LEN + 1];
-        printf("%s:msg> ", client->handle); // message prompt with username
-        scanf("%500s", &message);
+        char* message = malloc(kMaxClientMessageLength);
+        if (message == NULL)
+            break;
+
+        printf("msg> "); // message prompt
+        fgets(message, kMaxClientMessageLength, stdin);
+        
+        // Remove the trailing newline character if it exists
+        if (message[strlen(message) - 1] == '\n') {
+            message[strlen(message) - 1] = '\0';
+        }
 
         if (strlen(message) < 0)
             continue;
 
-        RelayClientSentMessage(server, message, client);
+        if (RelayClientSentMessage(server, message, client) == -1)
+            printf("ERROR\n");
+        
+        printf("\x1b[1A");
+        printf("\x1b[2K");
+        printf("\r");
+        // printf("You(%s): %s\n", client->handle, message);
     }
 
+    printf("ENDING\n");
     return 0;
 }
 
@@ -171,6 +184,7 @@ int Chatroom(Server* server) {
  * @retval          Success code
  */
 int DisplayServerInfo(char* serverName) {
+    UpdateServerList();
     Server* server = ServerFromAlias(serverName);
     
     if (server == NULL){
@@ -197,6 +211,7 @@ int DisplayServerInfo(char* serverName) {
  * @retval          0
  */
 int TotalOnlineServers() {
+    UpdateServerList();
     SysPrint(WHT UNDR, true, "There Are %i Online Servers", onlineServers);
     return 0;
 }

@@ -27,9 +27,12 @@
 #include "ccolors.h"
 
 extern unsigned int onlineServers; // Number of online servers
-extern Server       serverList[MAX_ALLOWED_SERVERS]; // List of all online servers
+extern Server       serverList[kMaxServersOnline]; // List of all online servers
 
 // Add a server to serverList
 int AddServerToList(Server server);
+
+// Set the current serverList to the most updated serverList
+Server* UpdateServerList(); 
 
 #endif // __BROWSER__

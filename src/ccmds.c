@@ -31,7 +31,7 @@ Command validCommands[] = {
     {"--dbg", "Toggle Debug mode", EnableDebugMode},
     {"--quit", "Exit The Application", ExitApp},
     {"--joins <server-name>", "Join Server With The Name", JoinServerByName},
-    {"--makes <server-name> <port> <max-clients>", "Make a Server With Specified Name", }
+    {"--makes <server-name> <port> <max-clients>", "Make a Server With Specified Name", NULL}
 };
 
 const int numOfCommands = sizeof(validCommands) / sizeof(validCommands[0]);

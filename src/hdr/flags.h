@@ -1,65 +1,58 @@
 /**
- * Flags to set when transfering data over sockets.
- * Allows to know which type of structs of info you are sending         
- */
-typedef enum eDataFlags
-{
-    df_NONE = -1, // No flags
-    df_USER = 10, // is a user struct 
-    df_SERVER = 20, // is a server struct
-    df_CMESSAGE = 33, // is a client sent message struct
-} dflags;
-
-/**
  * Flags to set when we ant the root server to perform commands
  * Tells the root server what commands to perform with the data
  */
-typedef enum cmdFlags
+
+// NOTE: Whenever you see cf, it is a flag to set 
+// client side for the root server to perform that command
+typedef enum CommandFlags
 {
-    cf_NONE = -123, // No Command
+    k_cfNone = -123, // No Command to perform
 
     // Commands regarding server browser/explorer
-    cf_APPEND_SERVER       = 10,  // Append server to explorer 
-    cf_REMOVE_SERVER       = -10, // Remove server from explorer
-    cf_REQUEST_SERVER_LIST = 100, // Get all updated server list
-    cf_MAKE_NEW_SERVER     = 920, // Create a new server clients can connect to
+    k_cfAppendServer               = 10,  // Append server to explorer 
+    k_cfRemoveServer               = -10, // Remove server from explorer
+    k_cfRequestServerList         = 100, // Get all updated server list
+    k_cfMakeNewServer             = 920, // Create a new server clients can connect to
+    k_cfUpdateServerWithNewINfo = 892, // A server has updated info to be pushed onto the root server
 
     // Commands regarding client
-    cf_DISCONNECT_CLIENT_FROM_ROOT = 914, // Remove client from root server
-    cf_USER_JOINED                 = 932, // User joined specifed server
-    cf_BAN_CLIENT_FROM_SERVER      = 482, // Ban a client from the server. Must be host
-    cf_KICK_CLIENT_FROM_SERVER     = 423, // Remove client from the server. Must be host
+    k_cfDisconnectClientFromRoot = 914, // Remove client from root server
+    k_cfConnectClientToServer        = 932, // User joined specifed server
+    k_cfBanClientFromServer      = 482, // Ban a client from the server. Must be host
+    k_cfKickClientFromServer     = 423, // Remove client from the server. Must be host
+    k_cfUpdateClientInfoInServer     = 548, // Update a User* struct in a server client list
 
     // Message command
-    cf_RELAY_MESSAGE_IN_SERVER  = 1840, // Send message from client to all clients in server 
-    cf_RECV_CLIENT_SENT_MESSAGE = 1323, // Receive a message from client in a server and print it out
-    // cf_SEND_MESSAGE_TO_ALL_CLIENTS = 1923, // Send client sent message to everyone in the current server
-} cflags;
+    k_cfEchoClientMessageInServer  = 1840, // Send message from client to all clients in server 
+    k_cfPrintEchodClientMessage = 1323, // Receive a message from client in a server and print it out
+} CommandFlag;
 
 
 /**
  * Flags to tell the client what happened
- * After the response. Similar to rcodes
+ * After the response.
+ * Different from ResponseCode as ResponseFlags-
+ * gives more detailed explanation on what happened with the clients request
  */
-typedef enum responseFlags
+typedef enum ResponseFlags
 {
-    rf_NONE            = 1,   // No flags
-    rf_DATA_UPDATED    = 903, // The data was updated somehow.
-    rf_NO_DATA_CHANGED = 923, // No data in the request was modified
-    rf_NO_DATA_ADDED   = 103, // No new data was added. Return value is likely null
-    rf_VALUE_RETURNED  = 823, // A value has been returned
-    rf_NO_VALUE_RETURNED = -823, // No return value. Return value is null
-} rflags;
+    k_rfNoResponse                 = 1,   // No flags. Default
+    k_rfRequestedDataUpdated       = 903, // The data was updated somehow.
+    k_rfNoDataChanged              = 923, // No data in the request was modified
+    k_rfSentDataWasUnused          = 103, // No new data was added. Return value is likely null
+    k_rfValueReturnedFromRequest   = 823, // A value has been returned
+    k_rfNoValueReturnedFromRequest = -823, // No return value. Return value is null
+} ResponseFlag;
 
+ 
 /**
  * Response codes from the root server
  * After a request is made to it
  * Indicate what happened- is it successful or fail
  */
-typedef enum responseCodes
+typedef enum ResponseCodes
 {
-    rc_SUCCESSFUL_OPERATION  = 0,    // Normal Success Code.
-    rc_INTERNAL_SERVER_ERROR = -192, // Something went wrong on the servers side
-
-
-} rcodes;
+    k_rcRootOperationSuccessful  = 0,    // Normal Success Code.
+    k_rcInternalServerError = -192, // Something went wrong on the servers side
+} ResponseCode;

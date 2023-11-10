@@ -6,12 +6,19 @@ void MallocClient() {
 }
 
 size_t ClientIndex(const User* arr[], size_t size, User* value)
-{ 
-    size_t index = 0;
+{
+    for (int i=0; i<size; i++)
+    {
+        if (strcmp(arr[i]->handle, value->handle) == 0)
+            return i;
+    }
 
-    while ( index < size && arr[index] != value ) ++index;
+    return -1;
+    // size_t index = 0;
 
-    return ( index == size ? -1 : index );
+    // while ( index < size && arr[index] != value ) ++index;
+
+    // return ( index == size ? -1 : index );
 }
 
 void DisconnectClient(){
@@ -19,8 +26,8 @@ void DisconnectClient(){
 
     SysPrint(WHT, true, "Disconnecting %s", client->handle);
     client->removeMe = true;
-    RootResponse response = MakeRootRequest(cf_DISCONNECT_CLIENT_FROM_ROOT, df_USER, rootServer, *client, NULL);
-    if (response.rcode = rc_SUCCESSFUL_OPERATION){
+    RootResponse response = MakeRootRequest(k_cfDisconnectClientFromRoot, rootServer, *client, (CMessage){0});
+    if (response.rcode = k_rcRootOperationSuccessful){
         SysPrint(GRN, false, "Disconnected. Goodbye");
     }
 
@@ -33,7 +40,7 @@ void RecvClientMessages(void* serverInfo)
     while (1)
     {
         CMessage receivedCMessage = {0};
-        int receivedBytes = recv(client->cfd, (void*)&receivedCMessage, sizeof(CMessage), 0);
+        int receivedBytes = recv(client->cfd, (void*)&receivedCMessage, sizeof(receivedCMessage), 0);
 
         // todo: handle situation
         if (receivedBytes <= 0)
@@ -41,13 +48,16 @@ void RecvClientMessages(void* serverInfo)
 
         switch (receivedCMessage.cflag)
         {
-        case cf_RECV_CLIENT_SENT_MESSAGE:
+        case k_cfPrintEchodClientMessage:
             printf("%s: %s\n", receivedCMessage.sender->handle, receivedCMessage.message);
             break;
  
         // TODO: Handle situation
-        case cf_KICK_CLIENT_FROM_SERVER:
-        case cf_BAN_CLIENT_FROM_SERVER:
+        case k_cfKickClientFromServer:
+            printf("You have been kicked from '%s'...\n", server->alias);
+            MakeRootRequest(k_cfKickClientFromServer, *server, *client, (CMessage){0});
+            break;
+        case k_cfBanClientFromServer:
             break;
         default:
             break;
@@ -68,22 +78,23 @@ void* HandleClientInput(){
         bool successCmd = false;
 
         if (prnt) {
-            printf("cmd> ");
+            printf("Enter Command> ");
             prnt = false;
         }
 
-        scanf("%99[^\n]", cmd);
-        getchar();
+        fgets(cmd, kMaxCommandLength, stdin);
 
         if (strlen(cmd) == 0) {
             continue; // Skip processing if the command is empty
         }
 
+        printf("You inputted: %s\n", cmd);
+
         // Find command function
         for (int i = 0; i < numOfCommands; i++) {
             // Server info command. It takes command-line arguments
             if (strstr(cmd, "--si") != NULL) {
-                char serverName[MAX_ALIAS_LEN + 1];
+                char serverName[kMaxServerAliasLength + 1];
 
                 if (sscanf(cmd, "--si %32s", serverName) != 1) {
                     SysPrint(RED, true, "Invalid Usage for --si. View --help for more info.");
@@ -98,7 +109,7 @@ void* HandleClientInput(){
 
             // Join server command. It takes command-line arguments
             if (strstr(cmd, "--joins") != NULL) {
-                char serverName[MAX_ALIAS_LEN + 1];
+                char serverName[kMaxServerAliasLength + 1];
 
                 if (sscanf(cmd, "--joins %32s", serverName) != 1) {
                     SysPrint(RED, true, "Invalid Usage for --joins. View --help for more info.");
@@ -112,7 +123,7 @@ void* HandleClientInput(){
             }
 
             if (strstr(cmd, "--makes") != NULL) {
-                char serverName[MAX_ALIAS_LEN + 1];
+                char serverName[kMaxServerAliasLength + 1];
                 unsigned int maxClients;
                 unsigned int port;
 
@@ -152,16 +163,23 @@ void* HandleClientInput(){
  */
 void ChooseClientHandle() {
     bool warned = false;
-    
+    bool goodUsername = false; // Does the client username inputted follow the rules
+
     SysPrint(CYN, true, "Enter a username before joining:");
     
     // Make sure username is valid and follows rules
     do {
-        char usrname[MAX_USRNAME_LEN + 1];                   
-        printf(CYN "inp> " RESET);            
-        scanf("%20s", usrname);
+        char username[kMaxClientHandleLength + 1];                   
+        printf(CYN "Select Your Username> " RESET);        
+        fgets(username, kMaxClientHandleLength, stdin);    
+        
+        // Remove the trailing newline character if it exists
+        if (username[strlen(username) - 1] == '\n') {
+            username[strlen(username) - 1] = '\0';
+        }
+        
         for (int i=0; i < numOfCommands; i++){
-            if (strstr(usrname, validCommands[i].commandName) != NULL) 
+            if (strstr(username, validCommands[i].commandName) != NULL) 
             {
                 SysPrint(YEL, true, "[WARNING]: Username cannot be a command.");
                 warned = true;
@@ -174,20 +192,14 @@ void ChooseClientHandle() {
             continue;
         }
 
-        if (strlen(usrname) <= 2 && !warned){
+        if (strlen(username) <= 2 && !warned){
             SysPrint(YEL, true, "[WARNING]: Username too short (Min 3 Chars).");
             warned=!warned;
             continue;
         }
 
-        if (strchr(usrname, ' ') != NULL && !warned){
-            SysPrint(YEL, true, "[WARNING]: Username cannot have spaces.");
-            warned=!warned;
-            continue;
-        }
-
         goodUsername=true;
-        strcpy(client->handle, usrname);
+        strcpy(client->handle, username);
     } while(!goodUsername);
 
     SysPrint(CYN, false, "You will now be known as: '%s' for this session.", client->handle);
@@ -197,7 +209,7 @@ void AssignDefaultHandle(char defaultName[]) {
     time_t now = time(NULL);
     struct tm* timestr = gmtime(&now);
 
-    char nameIdentifier[MAX_USRNAME_LEN + 1];
+    char nameIdentifier[kMaxClientHandleLength + 1];
     sprintf(nameIdentifier, "%d", timestr->tm_sec);
 
     strcpy(defaultName, "usr");

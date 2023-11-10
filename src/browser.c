@@ -19,7 +19,7 @@
 #include "hdr/browser.h"
 
 unsigned int onlineServers = 0;
-Server       serverList[MAX_ALLOWED_SERVERS] = {0};
+Server       serverList[kMaxServersOnline] = {0};
 
 /**
  * @brief           Add a valid server to server list
@@ -27,15 +27,31 @@ Server       serverList[MAX_ALLOWED_SERVERS] = {0};
  * @return          int
  * @retval          success or failure
  */
-int AddServerToList(Server server){
+int AddServerToList(Server server) {
     if (server.online == false){
         printf("ERROR: Cannot add offline server to list");
         return -1;
     }
 
     serverList[onlineServers] = server;
-    onlineServers+=1;
+    onlineServers++;
 
     return 0;
 }
 
+Server* UpdateServerList() {
+    RootResponse response = MakeRootRequest(
+        k_cfRequestServerList,
+        (Server){0}, // no related server
+        (User){0},  // no user
+        (CMessage){0} // No cmessage
+        );
+    
+    if (response.rcode != k_rcRootOperationSuccessful)
+        return NULL;
+    
+    // MakeRootRequest already updates serverList
+    // and onlineServers client side
+    // When k_cfRequestServerList is passed.
+    return serverList;
+}
