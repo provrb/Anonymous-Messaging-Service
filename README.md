@@ -13,17 +13,12 @@ _Better than IRC. More anonymous.
 Currently only for Linux operating systems.
 Created on Linux Mint in C/C++ with Visual Studio Code and compiled with GCC._
 
-# REWORKING P2P PROCCESSES
-Reworking the application so that it is more efficient.
-
-The server will handle everything. A fully authentic coded server and requests like HTTP.
-1. Migrating many client-sided processes to be handled server-sided
-2. Better for an end-to-end encrypted.
-
 # HOW CHATS ARE ENCRYPTED
-The messages that pass to the server before reaching other clients in the chatroom are encrypted by AES-256 GCM.
+Currently all chats are encrypted on the server by being xor'd.
+Decrypted once a peer client receives the message. Simple encryption method.
 
-An unbreakable bt brute-force encryption method used by the NSA and the US military.
+~~The messages that pass to the server before reaching other clients in the chatroom are encrypted by AES-256 GCM.~~
+~~An unbreakable brute-force encryption method used by the NSA and the US military.~~
 
 ## v1.0.1
 - Major code cleanup
@@ -32,3 +27,11 @@ An unbreakable bt brute-force encryption method used by the NSA and the US milit
 
 ## v1.0.2
 - Remove data flags. Old way to tell what information was being sent to the root server
+
+## v1.1
+- More documentation in header files
+- Working Servers (May be bugs)
+- Code cleanup
+- Bug fixes
+- Optimization
+- Make requests to a server
