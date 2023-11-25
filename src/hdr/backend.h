@@ -22,15 +22,30 @@
 #include <string.h>          
 #include <stdio.h>
 #include <ctype.h>
+#include "cli.h"
 #include "server.h"
 #include "tools.h"
+#include "client.h"
 
-typedef void (*CommandFunction)();
+/*
+    Get a server struct from a server name
 
-// Get Server Struct from server name
+    If the server does not exist, NULL will be returned.
+    Otherwise, a pointer to that 'Server' struct will be returned.
+*/
 Server* ServerFromAlias(char* alias);
 
-// Make a request TO the root server
+/* 
+    Make a request to the root server.
+
+    The request is sent over a tcp socket by sending a 'RootRequest'
+    struct that includes everything about the request.
+    This function fills in the struct with the arguments provided.
+    
+    Once the root server receives the request, it will try and 
+    perform it. After it will return a struct called 'RootResponse'
+    that includes information about what happened on the root server.
+*/
 RootResponse MakeRootRequest(
     CommandFlag    commandFlag,
     Server    currentServer,
@@ -38,27 +53,25 @@ RootResponse MakeRootRequest(
     CMessage clientMessageInfo
 ); 
 
-CommandFunction ExitApp();
+/*
+    Exit the client application.
 
-/**
- *    --------[ SETTINGS FUNCTIONS ]--------
- * Functions to control the settings
- * for the user. 
- * 
- * Settings reset every session.
- * 
- */
-CommandFunction EnableDebugMode();
+    Safely removes the client and makes a request
+    to remove the client from any servers and update
+    the statistics on the root server. i.e online clients.
+*/
+void ExitApp();
 
-/**
- * 
- *      --------[ JOIN FUNCTIONS ]--------         
- * Many different ways a user can join a server
- * Used with commands and arguements.
- * 
- */
-void             JoinServer(Server* server); // Join a server from struct
-CommandFunction* JoinServerByName(void* name); // Join server from its alias
-CommandFunction* JoinServerByListIndex(int index); // Join server from index in the server list
+/* Removed */
+// void EnableDebugMode();
+
+// ------ Join Server Functions --------
+/* 
+    A couple different ways for a user to join a server.
+    All of them achieve the same goal.
+*/
+void*  JoinServer(Server* server); // Join a server from 'Server' struct
+void* JoinServerByName(void* name); // Join server from servers alias
+void* JoinServerByListIndex(int index); // Join server from index in the server list
 
 #endif // __BACKEND__

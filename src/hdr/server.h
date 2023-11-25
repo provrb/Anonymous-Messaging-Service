@@ -16,8 +16,8 @@
  * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  */
 
-#ifndef __SERVER__
-#define __SERVER__
+#ifndef __SERVER_H_
+#define __SERVER_H_
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -36,6 +36,7 @@
 #include "ccolors.h"
 #include "flags.h"
 #include "../ext/aes.h"
+#include "../ext/aes-gcm.h"
 #include "min_max_values.h"
 
 // Debug mode. Allows for more printing
@@ -46,14 +47,6 @@ struct ServerStr; // To put it in UserStr before ServerStr is defined
 
 // Structure representing a client connected
 struct UserStr;   // So UserStr can be compiled if it it used before defined
-
-/**
- * @brief           Print out a message with time and server prefix
- * @param[in]       color: What to color terminal text
- * @param[in]       str: String to print
- * @param[in]       ...: Formatting
- */
-void SERVER_PRINT(const char* color, const char* str, ...);
 
 // Information about a user
 typedef struct UserStr
@@ -83,12 +76,12 @@ typedef struct ServerStr
     bool               isRoot; // if the connected server is the root server
     User*              host; // Client who requested for server to be created
 
-    User** clientList;
+    User** clientList; // list of clients. NEEDS TO BE MALLOCED FIRST
 } Server;
 
 // Info to create a server with
 // Includes the client info of the host
-typedef struct ServerCreationData
+typedef struct ServerCreationInformation
 {
     User*   clientAKAhost; // Host of the server. The person who requested to create the server
     Server* serverInfo; // Info of the server to be used when creating
@@ -104,7 +97,7 @@ typedef struct ClientMessage
 
 // A struct with information to send the root server
 // to perform a request
-typedef struct ServerRequest
+typedef struct RootServerRequest
 {
     CommandFlag cmdFlag; // What command to tell root server to perform
     User        user;
@@ -121,16 +114,20 @@ typedef struct Response
     void*  returnValue; // Expect returned thing from making the root request like a server list
 } RootResponse;
 
-
-// Global variables
-extern User*  client; // Client struct
-extern int    onlineGlobalClients; // online world-wide clients
-extern User   rootConnectedClients[]; // clients connected to the root server
-extern Server rootServer; // Root server that holds all servers and handles all client connections
-
+/**
+ * @brief           Print out a message with time and server prefix
+ * @param[in]       color: What to color terminal text
+ * @param[in]       str: String to print
+ * @param[in]       ...: Formatting
+ */
+void SERVER_PRINT(const char* color, const char* str, ...);
 
 // Allocate memory for the client so its usable. No segmentation faults
 void MallocClient();
+
+// Allocate memory for the array of clients in server struct
+// Only use on creation of server.
+void MallocServerClientList(Server* server);
 
 // Send a message sent to the server to all clients connected to that server
 int RelayClientSentMessage(
@@ -161,9 +158,17 @@ int MakeServer(
     char* alias
 );
 
+// Doesn't return anything because
+// the CMessage.message string will be encrypted
+void EncryptClientMessage(CMessage* message);
+
+ResponseCode DoServerRequest(
+    void* request
+);
+
 // Check if 'user' is host of 'server'
 bool IsUserHost(
-    User* user,
+    User user,
     Server* server
 );
 
@@ -177,4 +182,5 @@ void ShutdownServer(
     char* alias
 );
 
-#endif // __SERVER__
+
+#endif // __SERVER_H_

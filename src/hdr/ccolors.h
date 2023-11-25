@@ -1,13 +1,16 @@
-/* 
-    To color the text in the terminal:
-    Use the color codes in the print statements.
+#ifdef __linux__
+
+/*
+    These sequences only work in the Linux terminal.
 */
 
-// Bold, etc
-#define BOLD  "\e[1m"
-#define UNDR  "\033[4m" // underline
+/*
+    Sequences to print colored text in the terminal.
+    No need to do printf(RED + "your text\n" + RESET).
 
-// Colors
+    Text can simply be printed like:
+    printf(RED "your text\n" RESET)
+*/
 #define RED   "\x1B[31m"
 #define GRN   "\x1B[32m"
 #define YEL   "\x1B[33m"
@@ -17,3 +20,12 @@
 #define WHT   "\x1B[37m"
 #define RESET "\x1B[0m"
 
+/*
+    Sequences to print stylized text in the terminal.
+    Used the same as colors.
+    printf(BOLD "your text\n" RESET)
+*/
+#define BOLD  "\e[1m"
+#define UNDR  "\033[4m" // underline
+
+#endif // __linux__

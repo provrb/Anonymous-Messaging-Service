@@ -10,18 +10,19 @@ typedef enum CommandFlags
     k_cfNone = -123, // No Command to perform
 
     // Commands regarding server browser/explorer
-    k_cfAppendServer               = 10,  // Append server to explorer 
-    k_cfRemoveServer               = -10, // Remove server from explorer
-    k_cfRequestServerList         = 100, // Get all updated server list
-    k_cfMakeNewServer             = 920, // Create a new server clients can connect to
+    k_cfAppendServer = 10,  // Append server to explorer 
+    k_cfRemoveServer = -10, // Remove server from explorer
+    k_cfRequestServerList = 100, // Get all updated server list
+    k_cfMakeNewServer = 920, // Create a new server clients can connect to
     k_cfUpdateServerWithNewINfo = 892, // A server has updated info to be pushed onto the root server
 
     // Commands regarding client
     k_cfDisconnectClientFromRoot = 914, // Remove client from root server
-    k_cfConnectClientToServer        = 932, // User joined specifed server
-    k_cfBanClientFromServer      = 482, // Ban a client from the server. Must be host
-    k_cfKickClientFromServer     = 423, // Remove client from the server. Must be host
-    k_cfUpdateClientInfoInServer     = 548, // Update a User* struct in a server client list
+    k_cfConnectClientToServer = 932, // User joined specifed server
+    k_cfBanClientFromServer = 482, // Ban a client from the server. Must be host
+    k_cfKickClientFromServer = 423, // Remove client from the server. Must be host
+    k_cfUpdateClientInfoInServer = 548, // Update a User* struct in a server client list
+    k_cfAddClientToServer = 10023, // Add client to server list
 
     // Message command
     k_cfEchoClientMessageInServer  = 1840, // Send message from client to all clients in server 
@@ -37,11 +38,11 @@ typedef enum CommandFlags
  */
 typedef enum ResponseFlags
 {
-    k_rfNoResponse                 = 1,   // No flags. Default
-    k_rfRequestedDataUpdated       = 903, // The data was updated somehow.
-    k_rfNoDataChanged              = 923, // No data in the request was modified
-    k_rfSentDataWasUnused          = 103, // No new data was added. Return value is likely null
-    k_rfValueReturnedFromRequest   = 823, // A value has been returned
+    k_rfNoResponse = 1,   // No flags. Default
+    k_rfRequestedDataUpdated = 903, // The data was updated somehow.
+    k_rfNoDataChanged = 923, // No data in the request was modified
+    k_rfSentDataWasUnused = 103, // No new data was added. Return value is likely null
+    k_rfValueReturnedFromRequest = 823, // A value has been returned
     k_rfNoValueReturnedFromRequest = -823, // No return value. Return value is null
 } ResponseFlag;
 
@@ -53,6 +54,6 @@ typedef enum ResponseFlags
  */
 typedef enum ResponseCodes
 {
-    k_rcRootOperationSuccessful  = 0,    // Normal Success Code.
+    k_rcRootOperationSuccessful = 0,    // Normal Success Code.
     k_rcInternalServerError = -192, // Something went wrong on the servers side
 } ResponseCode;

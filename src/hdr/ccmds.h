@@ -24,17 +24,32 @@
 #include <stdbool.h>
 #include "backend.h"
 
-// Turn int preproccessor definition to string
-#define STRINGIFY(x) #x 
+/*
+    Specific functions that can be ran
+    through the command-line by the client.
+    
+    These command functions do NOT have parameters.
+*/
+typedef void (*CommandFunction)();
 
-// Represents a command with a function to execute the command
+/*
+    A structure representing a typeable command
+    for the client.
+
+    A client can enter 'commandName' to perform a command,
+    provided that the arguments are all entered correctly.
+    
+    If 'function' is null, it means the function takes
+    arguments and they cannot be passed through a simple
+    'CommandFunction'' function like in the struct below.
+*/
 typedef struct CMD {
     const char* commandName;
     char* cmdDesc;
     CommandFunction function;    
 } Command; 
 
-extern Command validCommands[];
-extern const int numOfCommands;
+extern Command   validCommands[]; // A list of valid command structs that can be ran by client in cli
+extern const int numOfCommands; // The number of valid commands
 
 #endif // __INTERFACE_H_

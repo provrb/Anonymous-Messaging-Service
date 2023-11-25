@@ -23,14 +23,14 @@
 
 // Map of valid commands
 Command validCommands[] = {
-    {"--help", "Show list of commands", DisplayCommands},
-    {"--servers", "Show all servers", DisplayServers}, // Show list of servers
-    {"--so", "Number of online servers", TotalOnlineServers},
-    {"--si <server-name>", "View Info Of a Server", DisplayServerInfo},
-    {"--main", "Show The Main Menu", SplashScreen},
-    {"--dbg", "Toggle Debug mode", EnableDebugMode},
-    {"--quit", "Exit The Application", ExitApp},
-    {"--joins <server-name>", "Join Server With The Name", JoinServerByName},
+    {"--help"                                    , "Show list of commands"            , DisplayCommands},
+    {"--servers"                                 , "Show all servers"                 , DisplayServers}, // Show list of servers
+    {"--so"                                      , "Number of online servers"         , TotalOnlineServers},
+    {"--si <server-name>"                        , "View Info Of a Server"            , NULL},
+    {"--main"                                    , "Show The Main Menu"               , SplashScreen},
+    // {"--dbg"                                     , "Toggle Debug mode"                , EnableDebugMode},
+    {"--quit"                                    , "Exit The Application"             , ExitApp},
+    {"--joins <server-name>"                     , "Join Server With The Name"        , NULL},
     {"--makes <server-name> <port> <max-clients>", "Make a Server With Specified Name", NULL}
 };
 

@@ -21,10 +21,9 @@ The server will handle everything. A fully authentic coded server and requests l
 2. Better for an end-to-end encrypted.
 
 # HOW CHATS ARE ENCRYPTED
-Chats in this version are xor'd when they reached the server and decrypted when they reach a peer client.
-~~The messages that pass to the server before reaching other clients in the chatroom are encrypted by AES-256 GCM.~~
+The messages that pass to the server before reaching other clients in the chatroom are encrypted by AES-256 GCM.
 
-~~An unbreakable brute-force encryption method used by the NSA and the US military.~~
+An unbreakable bt brute-force encryption method used by the NSA and the US military.
 
 ## v1.0.1
 - Major code cleanup

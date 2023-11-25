@@ -18,6 +18,10 @@
 
 #include "hdr/root.h"
 
+int    onlineGlobalClients = 0;     // All clients connected to the root server
+User   rootConnectedClients[] = {}; // List of all clients on the root server
+Server rootServer;                  // Root server info
+
 void UpdateServerWithNewInfo(Server* server)
 {
     // Iterate through server list to find the server to update
@@ -73,9 +77,10 @@ void UpdateClientInConnectedServer(User* userToUpdate)
     UpdateServerWithNewInfo(server);
 }
 
-ResponseCode DoRequest(void* req)
+pthread_t tidd;
+ResponseCode DoRootRequest(void* req)
 {
-    RootRequest request = *(RootRequest*)req;
+    RootRequest  request = *(RootRequest*)req;
     RootResponse response;
     memset(&response, 0, sizeof(response)); 
 
@@ -103,8 +108,6 @@ ResponseCode DoRequest(void* req)
         for (int servIndex=0; servIndex<onlineServers; servIndex++)
         {
             Server server = serverList[servIndex];
-            printf("\t[%i] - [%i/%i]: %s\n", servIndex+1, server.connectedClients, server.maxClients, server.alias);
-            printf("\t\tHost: %s\n", server.host->handle); 
             send(request.user.rfd, (void*)&server, sizeof(Server), 0);
         }
 
@@ -137,9 +140,13 @@ ResponseCode DoRequest(void* req)
         creationInfo.serverInfo = &request.server;
         creationInfo.clientAKAhost = &request.user;
 
+        // ServerBareMetal((void*)&creationInfo);
+
         if (pthread_create(&pid, NULL, ServerBareMetal, (void*)&creationInfo) != 0)
             SysPrint(RED, true, "***** FATAL ERROR: Failed to Make Thread for Server. Errno %i. Aborting.", errno);
-        break;
+        // pthread_join(pid, NULL);
+        break;    // close(sfd);
+    // pthread_exit(NULL);
     case k_cfDisconnectClientFromRoot:
         DisconnectClientFromRootServer(&request.user);
         break;
@@ -149,6 +156,18 @@ ResponseCode DoRequest(void* req)
         break;
     case k_cfUpdateClientInfoInServer:
         UpdateClientInConnectedServer(&request.user);
+        break;
+    case k_cfUpdateServerWithNewINfo:
+        UpdateServerWithNewInfo(&request.server);
+        break;
+    case k_cfAddClientToServer:
+        request.server.connectedClients++; // increment num of connected clients
+        request.server.clientList[request.server.connectedClients] = &request.user; // add client to client list
+        UpdateServerWithNewInfo(&request.server); // Update server in serverList with new info
+
+        response.returnValue = (void*)&request.server;
+        response.rflag = k_rfValueReturnedFromRequest;
+        Respond(&request.user, response);
         break;
     default:
         return k_rcInternalServerError; // LIkely the command doesnt exist
@@ -164,6 +183,7 @@ void* AcceptClientRoot() {
 
     while (1) {
         cfd = accept(rootServer.sfd, (struct sockaddr*)NULL, NULL);
+
         if (onlineGlobalClients + 1 >= kMaxGlobalClients || cfd < 0)
             continue;
 
@@ -171,25 +191,30 @@ void* AcceptClientRoot() {
         RootRequest request;
         memset(&request, 0, sizeof(RootRequest));
         int clientInfo = recv(cfd, (void*)&request, sizeof(request), 0);
-        if (clientInfo < 0) printf("Error receiving client info.\n");
+        
+        if (clientInfo < 0) 
+            printf("Error receiving client info.\n");
 
         // user wants to join
         if (request.cmdFlag == k_cfConnectClientToServer) {
-            printf(GRN "\n%s Came Online!\n" RESET, request.user.handle);
-            
-            
-            request.user.rfd                      = cfd;
-            request.user.connectedServer          = &rootServer;
-            rootConnectedClients[onlineGlobalClients] = request.user;
+            SysPrint(CYN, false, "%s Joined!", request.user.handle);
+                        
+            User updatedUser = {0};
+            updatedUser = request.user;
+            strcpy(updatedUser.handle, request.user.handle);
+            updatedUser.rfd             = cfd;
+            updatedUser.connectedServer = &rootServer;
+            rootConnectedClients[onlineGlobalClients] = updatedUser;
             onlineGlobalClients++;
+
 
             // Send info back
             RootResponse response = {0};
             response.rcode        = k_rcRootOperationSuccessful;
-            response.returnValue  = (void*)&request.user;
+            response.returnValue  = (void*)&updatedUser;
             response.rflag        = k_rfRequestedDataUpdated;
            
-            int sendResponse = send(cfd, (const void*)&response, sizeof(response), 0);
+            int sendResponse = send(cfd, (void*)&response, sizeof(response), 0);
             if (sendResponse <= 0) {
                 printf(RED "\tError Sending Updated Struct Back\n" RESET);
                 continue;
@@ -200,63 +225,67 @@ void* AcceptClientRoot() {
             clientThreads[activeClientThreads] = thread;
 
             // Make a thread for each client who connects
-            if (pthread_create(&clientThreads[activeClientThreads], NULL, RecvClientRoot, (void*)&request.user) != 0){
+            if (pthread_create(&clientThreads[activeClientThreads], NULL, PerformRequestsFromClient, (void*)&updatedUser) != 0){
                 printf("Failed to create thread for client\n");
                 continue;
             }
 
-            pthread_join(clientThreads[activeClientThreads], NULL);
+            // pthread_join(clientThreads[activeClientThreads], NULL);
 
             activeClientThreads++;
         }
     }
 }
 
-void* RecvClientRoot(void* usr) {
+void* PerformRequestsFromClient(void* usr) {
+    
     User* connectedClient = (User*)usr;
-
+    
     // loop will be created for every client
     // to handle requests from each client
-    while (1) {
-        RootRequest receivedInfo;
-        size_t res = recv(connectedClient->rfd, (void*)&receivedInfo, sizeof(RootRequest), 0);
-        if (res < 0) {
-            SysPrint(RED, true, "Failed to Receive Message");
+    while (1) 
+    {
+        RootRequest receivedRequest;
+        size_t      receivedBytes = recv(connectedClient->rfd, (void*)&receivedRequest, sizeof(RootRequest), 0);
+        
+        if (receivedBytes < 0) 
+        {
+            SysPrint(RED, false, "Failed to Receive Message");
             continue;
-        } else if (res == 0) {
-            SysPrint(WHT, true, "Client '%s' Disconnected from the Server", connectedClient->handle);
+        } 
+        else if (receivedBytes == 0)
+        {
+            SysPrint(WHT, false, "Client '%s' Disconnected From the Server", connectedClient->handle);
             DisconnectClientFromRootServer(connectedClient);
             break;
         }
 
+        receivedRequest.user = *connectedClient;
+
         // No command to perform
-        if (receivedInfo.cmdFlag == k_cfNone || receivedInfo.cmdFlag == 0)
+        if (receivedRequest.cmdFlag == k_cfNone)
             continue;
 
-        // ReceivedInfo User should always be connectedCLient
-        if (strcmp(receivedInfo.user.handle, connectedClient->handle) != 0)
-            // Not the same user in request as connectedClient
+        ResponseCode result = DoRootRequest((void*)&receivedRequest);
+
+        if (result != k_rcRootOperationSuccessful) 
+        {
+            printf(RED "Error Doing Request '%i' From %s\n" RESET, receivedRequest.cmdFlag, connectedClient->handle);
             continue;
-
-        ResponseCode result = DoRequest((void*)&receivedInfo);
-
-        if (result != k_rcRootOperationSuccessful) {
-            printf(RED "Error Doing Request '%i' From %s\n" RESET, receivedInfo.cmdFlag, connectedClient->handle);
-            break;
         }
     }
+
     pthread_exit(NULL);
-}
+} 
 
 void Respond(User* to, RootResponse response) {
-    printf("Sending Response to Client %s With RFD %i.\n", to->handle, to->rfd);
-    int snd = sendto(to->rfd, (void*)&response, sizeof(response), 0, (struct sockaddr*)&to->caddr, sizeof(to->caddr));
+    fprintf(stderr, CYN "[AMS] Response to Client '%s' ", to->handle);
+    int snd = sendto(to->rfd, (void*)&response, sizeof(response), MSG_NOSIGNAL, (struct sockaddr*)&to->caddr, sizeof(to->caddr));
     
-    if (snd == -1 || snd <= 0) {
-        perror("Send failed");
-    } else {
-        printf("Sent\n");
-    }
+    if (snd <= 0)
+        printf(RED "Failed\n" RESET);
+    else
+        printf(GRN "Good\n" RESET);
 }
 
 void DisconnectClientFromRootServer(User* usr) {
@@ -273,7 +302,6 @@ void DisconnectClientFromRootServer(User* usr) {
     for(int i = index; i < onlineGlobalClients - 1; i++) 
         rootConnectedClients[i] = rootConnectedClients[i + 1]; 
 
-
     // Check if client is connected to server
     // If client is, update the server statistics
     if (usr->connectedServer->online) {
@@ -289,7 +317,7 @@ void DisconnectClientFromRootServer(User* usr) {
         for(int i = index; i < usr->connectedServer->connectedClients - 1; i++) 
             usr->connectedServer->clientList[i] = usr->connectedServer->clientList[i + 1]; 
 
-        if (IsUserHost(usr, usr->connectedServer))
+        if (IsUserHost(*usr, usr->connectedServer))
             ShutdownServer(usr->connectedServer->alias);
     }
 
@@ -303,8 +331,6 @@ void DisconnectClientFromRootServer(User* usr) {
  * @retval          success
  */
 int ConnectToRootServer() {
-    MallocClient();
-
     // Fill out information about the root server used to establish client connection.
 
     printf("Filling root server struct... ");
@@ -325,6 +351,8 @@ int ConnectToRootServer() {
     int cfd = socket(rootServer.domain, rootServer.type, rootServer.protocol); // These are the settings the root server uses
     if (cfd < 0)
         goto close_root_connection;
+    
+    rootServer.sfd = cfd;
 
     printf("Done\n");
     printf("Filling address info for client to connect... ");
@@ -337,7 +365,6 @@ int ConnectToRootServer() {
     addr.sin_port   = htons(rootServer.port); // Constant. Server will always be on this port
 
     // For now it will run on local machine
-
     if (inet_pton(rootServer.domain, "127.0.0.1", &addr.sin_addr) < 0)
         goto close_root_connection;
     
@@ -364,28 +391,25 @@ int ConnectToRootServer() {
    
     // Fill out local client info struct
     // Handle already filled out at start of program
-    client->cfd             = 0;
-    client->removeMe        = false;
-    client->caddr           = addr;
-    client->connectedServer = NULL;
-    client->rfd             = cfd;
-    client->joined = gmt();
-    AssignDefaultHandle(client->handle);
-    rootServer.sfd = cfd;
+    DefaultClientConnectionInfo();
 
     printf("Done\n");
     
     // Send client info
-    RootRequest req = {0};
-    req.clientSentMessage = (CMessage){0};
-    req.cmdFlag = k_cfConnectClientToServer;
-    req.server = rootServer;
-    req.user = *client;
+    RootRequest req       = {0};
+    req.clientSentMessage = (CMessage){0}; // No Client Message.
+    req.cmdFlag           = k_cfConnectClientToServer;
+    req.server            = rootServer;
+    req.user              = *localClient;
     int sendInfo = send(rootServer.sfd, (const void*)&req, sizeof(req), 0);
 
     printf("Sent current user info. Now trying to recv.\n");
 
-    // Get response. Updated user info
+    // Save user handle as it turns to garbage memory when new info is received.
+    char tempHandle[kMaxClientHandleLength];
+    strcpy(tempHandle, localClient->handle);
+
+    // Get response to update user info
     RootResponse resp = {0};
     int recvInfo = recv(rootServer.sfd, (void*)&resp, sizeof(resp), 0);
 
@@ -393,24 +417,30 @@ int ConnectToRootServer() {
 
     if (resp.rcode == k_rcRootOperationSuccessful && resp.rflag == k_rfRequestedDataUpdated)
     {
+        // Update the client with info from the root server
         User* updatedClient = (User*)&resp.returnValue;
-        client = updatedClient;
+        localClient = updatedClient;
+
+        // Get rid of junk username that was applied when we updated the user
+        // Make it the original username that was selected
+        strcpy(localClient->handle, tempHandle);
+        
+        // Make a thread for the client UI
+        pthread_t pid;
+        if (pthread_create(&pid, NULL, LoadClientUserInterface, NULL) != 0){
+            goto close_root_connection;
+        }
+
+        pthread_join(pid, NULL);
+
+        // Success
+        return 0;
     }
 
-    pthread_t pid;
-    if (pthread_create(&pid, NULL, ClientJoinedRoot, NULL) != 0){
-        // DEBUG_PRINT("Error making client handler thread");
-        goto close_root_connection;
-    }
-
-    pthread_join(pid, NULL);
-
-    // Success
-    return 0;
+    goto close_root_connection;
 
 // Error
 close_root_connection:
-    // DEBUG_PRINT("Closing root connection for client");
     printf("Failed\n");
     printf(RED "Failed to connect to main servers. Error code %i, %i attempts\n" RESET, errno, attempts);
     close(cfd);
@@ -441,6 +471,9 @@ int CreateRootServer() {
     if (sfd < 0)
         return -1;
     printf("Done\n");
+
+    const bool reuseaddr = true;
+    setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &reuseaddr, sizeof(int));
 
     printf("Creating server address info... ");
 	struct sockaddr_in serv_addr;
@@ -479,34 +512,34 @@ int CreateRootServer() {
     return 0;
 }
 
-void ClientJoinedRoot() {
-    ChooseClientHandle();
-    UI();
-}
-
 void DisconnectClientFromServer(User* user) {
+    User copy = *user;
     if (user->connectedServer->online)
     {
+        Server* server = user->connectedServer;
+
         // get index of client in server client list
         int index = -1;
-        for (int i=0; i < user->connectedServer->connectedClients; i++){
-            if (strcmp(user->connectedServer->clientList[i]->handle, user->handle) == 0) // Server exists in the list
+        for (int i=0; i < server->connectedClients; i++){
+            if (strcmp(server->clientList[i]->handle, user->handle) == 0) // Server exists in the list
                 index = i;
         }            
 
         // shift array to remove client from clientlist
-        for(int b=index; b < user->connectedServer->connectedClients - 1; b++) 
-            user->connectedServer->clientList[b] = user->connectedServer->clientList[b + 1]; 
+        for(int b=index; b < server->connectedClients-1; b++) 
+            server->clientList[b] = server->clientList[b + 1]; 
 
-        user->connectedServer->connectedClients--;
+        server->connectedClients--;
 
         close(user->cfd);
         
         // Update server with new info since 
         // the client list and connectedClients has been updated
-        UpdateServerWithNewInfo(user->connectedServer);
+        UpdateServerWithNewInfo(server);
 
-        if (IsUserHost(user, user->connectedServer))
-            ShutdownServer(user->connectedServer->alias);
+        if (IsUserHost(*user, server))
+        {
+            ShutdownServer(server->alias);
+        }
     }
 }

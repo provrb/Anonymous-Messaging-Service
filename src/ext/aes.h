@@ -1,91 +1,81 @@
-#ifndef _AES_H_
-#define _AES_H_
+/******************************************************************************
+*
+* THIS SOURCE CODE IS HEREBY PLACED INTO THE PUBLIC DOMAIN FOR THE GOOD OF ALL
+*
+* This is a simple and straightforward implementation of the AES Rijndael
+* 128-bit block cipher designed by Vincent Rijmen and Joan Daemen. The focus
+* of this work was correctness & accuracy.  It is written in 'C' without any
+* particular focus upon optimization or speed. It should be endian (memory
+* byte order) neutral since the few places that care are handled explicitly.
+*
+* This implementation of Rijndael was created by Steven M. Gibson of GRC.com.
+*
+* It is intended for general purpose use, but was written in support of GRC's
+* reference implementation of the SQRL (Secure Quick Reliable Login) client.
+*
+* See:    http://csrc.nist.gov/archive/aes/rijndael/wsdindex.html
+*
+* NO COPYRIGHT IS CLAIMED IN THIS WORK, HOWEVER, NEITHER IS ANY WARRANTY MADE
+* REGARDING ITS FITNESS FOR ANY PARTICULAR PURPOSE. USE IT AT YOUR OWN RISK.
+*
+*******************************************************************************/
 
-#include <stdint.h>
-#include <stddef.h>
+#ifndef AES_HEADER
+#define AES_HEADER
 
-// #define the macros below to 1/0 to enable/disable the mode of operation.
-//
-// CBC enables AES encryption in CBC-mode of operation.
-// CTR enables encryption in counter-mode.
-// ECB enables the basic ECB 16-byte block algorithm. All can be enabled simultaneously.
+/******************************************************************************/
+#define AES_DECRYPTION  0       // whether AES decryption is supported
+/******************************************************************************/
 
-// The #ifndef-guard allows it to be configured before #include'ing or at compile time.
-#ifndef CBC
-  #define CBC 1
-#endif
+#include <string.h>
 
-#ifndef ECB
-  #define ECB 1
-#endif
+#define ENCRYPT         1       // specify whether we're encrypting
+#define DECRYPT         0       // or decrypting
 
-#ifndef CTR
-  #define CTR 1
-#endif
-
-
-#define AES128 1
-//#define AES192 1
-//#define AES256 1
-
-#define AES_BLOCKLEN 16 // Block length in bytes - AES is 128b block only
-
-#if defined(AES256) && (AES256 == 1)
-    #define AES_KEYLEN 32
-    #define AES_keyExpSize 240
-#elif defined(AES192) && (AES192 == 1)
-    #define AES_KEYLEN 24
-    #define AES_keyExpSize 208
+#if defined(_MSC_VER)
+    #include <basetsd.h>
+    typedef UINT32 uint32_t;
 #else
-    #define AES_KEYLEN 16   // Key length in bytes
-    #define AES_keyExpSize 176
+    #include <inttypes.h>
 #endif
 
-struct AES_ctx
-{
-  uint8_t RoundKey[AES_keyExpSize];
-#if (defined(CBC) && (CBC == 1)) || (defined(CTR) && (CTR == 1))
-  uint8_t Iv[AES_BLOCKLEN];
-#endif
-};
-
-void AES_init_ctx(struct AES_ctx* ctx, const uint8_t* key);
-#if (defined(CBC) && (CBC == 1)) || (defined(CTR) && (CTR == 1))
-void AES_init_ctx_iv(struct AES_ctx* ctx, const uint8_t* key, const uint8_t* iv);
-void AES_ctx_set_iv(struct AES_ctx* ctx, const uint8_t* iv);
-#endif
-
-#if defined(ECB) && (ECB == 1)
-// buffer size is exactly AES_BLOCKLEN bytes; 
-// you need only AES_init_ctx as IV is not used in ECB 
-// NB: ECB is considered insecure for most uses
-void AES_ECB_encrypt(const struct AES_ctx* ctx, uint8_t* buf);
-void AES_ECB_decrypt(const struct AES_ctx* ctx, uint8_t* buf);
-
-#endif // #if defined(ECB) && (ECB == !)
+typedef unsigned char uchar;    // add some convienent shorter types
+typedef unsigned int uint;
 
 
-#if defined(CBC) && (CBC == 1)
-// buffer size MUST be mutile of AES_BLOCKLEN;
-// Suggest https://en.wikipedia.org/wiki/Padding_(cryptography)#PKCS7 for padding scheme
-// NOTES: you need to set IV in ctx via AES_init_ctx_iv() or AES_ctx_set_iv()
-//        no IV should ever be reused with the same key 
-void AES_CBC_encrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length);
-void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length);
-
-#endif // #if defined(CBC) && (CBC == 1)
+/******************************************************************************
+ *  AES_INIT_KEYGEN_TABLES : MUST be called once before any AES use
+ ******************************************************************************/
+void aes_init_keygen_tables( void );
 
 
-#if defined(CTR) && (CTR == 1)
+/******************************************************************************
+ *  AES_CONTEXT : cipher context / holds inter-call data
+ ******************************************************************************/
+typedef struct {
+    int mode;           // 1 for Encryption, 0 for Decryption
+    int rounds;         // keysize-based rounds count
+    uint32_t *rk;       // pointer to current round key
+    uint32_t buf[68];   // key expansion buffer
+} aes_context;
 
-// Same function for encrypting as for decrypting. 
-// IV is incremented for every block, and used after encryption as XOR-compliment for output
-// Suggesting https://en.wikipedia.org/wiki/Padding_(cryptography)#PKCS7 for padding scheme
-// NOTES: you need to set IV in ctx with AES_init_ctx_iv() or AES_ctx_set_iv()
-//        no IV should ever be reused with the same key 
-void AES_CTR_xcrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length);
 
-#endif // #if defined(CTR) && (CTR == 1)
+/******************************************************************************
+ *  AES_SETKEY : called to expand the key for encryption or decryption
+ ******************************************************************************/
+int aes_setkey( aes_context *ctx,       // pointer to context
+                int mode,               // 1 or 0 for Encrypt/Decrypt
+                const uchar *key,       // AES input key
+                uint keysize );         // size in bytes (must be 16, 24, 32 for
+		                        // 128, 192 or 256-bit keys respectively)
+                                        // returns 0 for success
 
+/******************************************************************************
+ *  AES_CIPHER : called to encrypt or decrypt ONE 128-bit block of data
+ ******************************************************************************/
+int aes_cipher( aes_context *ctx,       // pointer to context
+                const uchar input[16],  // 128-bit block to en/decipher
+                uchar output[16] );     // 128-bit output result block
+                                        // returns 0 for success
 
-#endif // _AES_H_
+#endif /* AES_HEADER */

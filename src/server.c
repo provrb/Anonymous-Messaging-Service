@@ -25,15 +25,7 @@ bool DEBUG = false; // Debug mode
 #include "hdr/ccmds.h"
 #include "hdr/tools.h"
 
-/* Local client info */
-User*  client;                      // Current client who ran the app
-
-/* Root server info */
-int    onlineGlobalClients = 0;         // All clients on the app
-User   rootConnectedClients[] = {}; // All clients on the app must be connected to the root
-Server rootServer;                  // Root server info
-
- void SERVER_PRINT(const char* color, const char* str, ...) {
+void SERVER_PRINT(const char* color, const char* str, ...) {
     struct tm* timestr = gmt();
 
     va_list argp;
@@ -55,7 +47,7 @@ void* ServerRecvThread(void* serverInfo)
         // Receive a message from a client
         CMessage message = {0};
         
-        int receivedBytes = recv(client->cfd, (void*)&message, sizeof(message), 0);
+        int receivedBytes = recv(localClient->cfd, (void*)&message, sizeof(message), 0);
         if (receivedBytes <= 0)
             break; // TODO: handle situation
         
@@ -102,6 +94,7 @@ void RecvMessages(void* serverInfo)
             if (message.cflag == k_cfEchoClientMessageInServer && receivedBytes > 0)
             {
                 // FIXME: Make it a thread so it can relay multiple messages at a time
+                // TODO: ENCRYPT MESSAGES
                 // Relay received message to all clients
                 for (int ci = 0; ci < server->connectedClients; ci++) {
                     User* connectedClient = server->clientList[ci];
@@ -132,6 +125,35 @@ void RelayMessagesOnServer(void* serverInfo)
     pthread_join(pid, NULL);
 }
 
+void* ListenForRequestsOnServer(void* server)
+{
+    Server* serverToListenOn = (Server*)server;
+
+    while (1)
+    {
+        ServerRequest request = {0};
+
+        // Recv info from the most recent client
+        // New thread created every client. Bad but will do
+        int recvBytes = recv(serverToListenOn->clientList[serverToListenOn->connectedClients-1]->cfd, (void*)&request, sizeof(request), 0);
+        
+        if (recvBytes <= 0)
+            continue;
+        
+        request.requestMaker.cfd = serverToListenOn->clientList[serverToListenOn->connectedClients-1]->cfd;
+        request.requestMaker.connectedServer = serverToListenOn;
+
+        printf(CYN "[%s] Received Server Request: %i\n" RESET, serverToListenOn->alias, request.command);
+
+        DoServerRequest((void*)&request);
+        
+        // Don't listen for requests from that client anymore
+        if (request.command == k_cfKickClientFromServer)
+            break;
+    }
+    pthread_exit(NULL);
+}
+
 /**
  * 
  * @brief           Accept all client connections on the server provided
@@ -143,7 +165,6 @@ void* ServerAcceptThread(void* serverInfo)
 {
     // Server info
     Server* server = (Server*)serverInfo; 
-    printf("Real name: %s\n", server->alias);
 
     pthread_t activeClientThreads[server->maxClients];
     int numOfClientThreads = -1;
@@ -151,40 +172,57 @@ void* ServerAcceptThread(void* serverInfo)
     pthread_t activeClientServerThreads[server->maxClients];
     int numOfClientServerThreads = -1;
 
+    int lstn = listen(server->sfd, server->maxClients);
+    if (lstn < 0) {
+        printf("listen: errno %i\n", errno);
+        close(server->sfd);
+        return NULL;
+    }
+
+    // 'server' becomes unsafe since we are in a thread.
+    // make copy of 'server' by dereferencing it. dont even need it as a pointer anymore
+    Server dereferencedServer = *server;
+
     int cfd = 0; // client file descriptor. get it from accepting the client
     while (1)
     {
-        cfd = accept(server->sfd, (struct sockaddr*)&server->addr, sizeof(server->addr));
+        cfd = accept(dereferencedServer.sfd, NULL, NULL);
 
-        if (cfd < 0) continue;
-
-        printf("\nAccepting a client connection on '%s'\n", server->alias);
-
-        server->connectedClients++;
-        
-        // Create a new thread to handle the client connection
-        pthread_t pid;
-
-        if (server->isRoot)
-        {
-            activeClientThreads[numOfClientThreads++] = pid;
-            if (pthread_create(&activeClientThreads[numOfClientThreads], NULL, ClientJoinedRoot, NULL) != 0) {
-                SysPrint(RED, true, "Error Making Client Handler Thread.");
-                DisconnectClient();
-            }
+        if (cfd < 0) {
+            // printf("accept: errno %i\n", errno);
+            // close(server->sfd);
+            continue;
         }
-        else
-        {
-            printf("hello world\n");
-            activeClientServerThreads[numOfClientServerThreads++] = pid;
-            if (pthread_create(&activeClientServerThreads[numOfClientServerThreads], NULL, RelayMessagesOnServer, (void*)server) != 0) {
-                SysPrint(RED, true, "Error Making Client Handler Thread.");
-                DisconnectClient();
-            }
-        }
+
+        User receivedUserInfo = {0};
+        int clientInfo = recv(cfd, (void*)&receivedUserInfo, sizeof(User), 0);  
+
+        if (clientInfo < 0)
+            continue;
+        else if (clientInfo == 0) // client disconnected
+            break;
+
+        dereferencedServer.clientList[dereferencedServer.connectedClients] = &receivedUserInfo;
+        dereferencedServer.connectedClients++;
+
+        receivedUserInfo.cfd = cfd;
+        receivedUserInfo.connectedServer = &dereferencedServer;
+
+        pthread_t tid;
+        pthread_create(&tid, NULL, ListenForRequestsOnServer, (void*)&dereferencedServer);
+
+        // Send the server info
+        int sentServerInfo = send(cfd, (void*)&dereferencedServer, sizeof(dereferencedServer), 0);
+
+        // TODO: handle situation where send fails
     }
 
     pthread_exit(NULL);
+}
+
+void MallocServerClientList(Server* server)
+{
+    server->clientList = (User**)malloc(sizeof(User*) * server->maxClients);
 }
 
 /**
@@ -200,9 +238,8 @@ void* ServerBareMetal(void* serverStruct)
      * Used to resolve information about a chatroom
      */
     ServerCreationInfo* creationInfo = (ServerCreationInfo*)serverStruct;
-    Server* serverInfo = creationInfo->serverInfo;
-    printf("User %s: Request: Make New Server\n", creationInfo->clientAKAhost->handle);
-    // printf("Done\n");
+    Server*             serverInfo   = creationInfo->serverInfo; // The info the user provided about the server they want to make
+    SysPrint(CYN, false, "%s: Request: Make New Server", creationInfo->clientAKAhost->handle);
 
     RootResponse response;
     memset(&response, 0, sizeof(RootResponse));
@@ -215,8 +252,6 @@ void* ServerBareMetal(void* serverStruct)
         serverInfo->maxClients = kDefaultMaxClients;
     }
 
-    // printf("Filling out server address information... ");
-
     /* Server address information */
     struct sockaddr_in addrInfo;
     memset(&addrInfo, 0, sizeof(struct sockaddr_in));
@@ -224,8 +259,6 @@ void* ServerBareMetal(void* serverStruct)
 	addrInfo.sin_addr.s_addr = htonl(INADDR_ANY);
 	addrInfo.sin_port        = htons(serverInfo->port);
 
-    // printf("Done\n");
-    // fprintf(stderr, "Creating socket for server...\n");
     // Create server socket
     int sfd = socket(serverInfo->domain, serverInfo->type, 0);
     if (sfd == -1) {
@@ -234,9 +267,6 @@ void* ServerBareMetal(void* serverStruct)
         goto server_close;
     }
 
-    // printf("Done\n");
-    // fprintf(stderr, "Binding socket to address info provided... ");
-
     // Bind socket to the address info provided
     int bnd = bind(sfd, (struct sockaddr * )&addrInfo, sizeof(addrInfo));
     if (bnd == -1) {
@@ -244,15 +274,6 @@ void* ServerBareMetal(void* serverStruct)
         Respond(creationInfo->clientAKAhost, response);
         goto server_close;
     }
-
-    struct tm* gmttime = gmt();
-
-    // " [00:00:00] Server 'my-room' Created By 'anon' "
-    printf(CYN "\n[%02d:%02d:%02d] Server '%s' Created by '%s'\n" RESET, gmttime->tm_hour,
-                                                                         gmttime->tm_min, 
-                                                                         gmttime->tm_sec, 
-                                                                         creationInfo->serverInfo->alias, 
-                                                                         creationInfo->clientAKAhost->handle);
 
     // Listen for client connections
     int lsn = listen(sfd, serverInfo->maxClients);
@@ -263,8 +284,10 @@ void* ServerBareMetal(void* serverStruct)
     }
 
     /* Server online, fill in rest of info */
-    serverInfo->connectedClients = 1; // 1 because the host
-    serverInfo->host       = creationInfo->clientAKAhost;
+    User hostCopy = *creationInfo->clientAKAhost;
+
+    serverInfo->connectedClients = 0;
+    serverInfo->host       = &hostCopy;
     serverInfo->domain     = creationInfo->serverInfo->domain;
     serverInfo->isRoot     = false;
     serverInfo->port       = serverInfo->port;
@@ -273,32 +296,30 @@ void* ServerBareMetal(void* serverStruct)
     serverInfo->sfd        = sfd;
     serverInfo->addr       = addrInfo;
     serverInfo->online     = true; // True. Server online and ready
-    serverInfo->clientList = (User**)malloc(serverInfo->maxClients * sizeof(User*)); // initialize client list
+    MallocServerClientList(serverInfo);
     strcpy(serverInfo->alias, creationInfo->serverInfo->alias);
-
-    // fprintf(stderr, "Appending server to browser... ");
-
+    
+    // add server to server list
     serverList[onlineServers++] = *serverInfo;
-        
-    // printf("Done\n");
 
-    // fprintf(stderr, "Creating accept thread... \n");
-
+    // respond to host telling them their server was made
     response.rcode = k_rcRootOperationSuccessful;
     response.returnValue = NULL;
     response.rflag = k_rfRequestedDataUpdated;
-    Respond(creationInfo->clientAKAhost, response);
+    Respond(serverInfo->host, response);
 
     pthread_t tid;
     pthread_create(&tid, NULL, ServerAcceptThread, (void*)serverInfo);
     pthread_join(tid, NULL);
+    return NULL;
 
 server_close:
     close(sfd);
     pthread_exit(NULL);
+    return NULL;
 }
 
-/**
+/** 
  * @brief           Wrapper for ServerBareMetal()
  * @param[in]       domain:     Domain for the socket
  * @param[in]       type:       Type of the socket
@@ -319,6 +340,7 @@ int MakeServer(
     char* alias
 )
 {
+    // Make sure server name follows rules
     if (strlen(alias) < kMinServerAliasLength){
         SysPrint(YEL, true, "[WARNING]: Server Name Too Short. Min %i", kMinServerAliasLength);
         return -1;
@@ -334,17 +356,25 @@ int MakeServer(
         return -1;
     }
 
-    // Iterate through servers, check if the alias is already in use
-    Server tmp;
-    for (int i=0; i<onlineServers; i++){
-        tmp = serverList[i];
-        char tmpName[kMaxServerAliasLength + 1];
-        strcpy(tmpName, tmp.alias);
-        if (tmpName != NULL){
+    // Iterate through servers, Check if the alias, and port is already in use
+    // TODO: Optimize. Might be extremely slow when theres a lot of servers
+    for (int i = 0; i < onlineServers; i++){
+        
+        // Check if port is in use
+        if (port == serverList[i].port)
+        {
+            SysPrint(YEL, true, "[WARNING]: Port Already In Use. Choose a Different Port. (%i)", port);
+            return -1;
+        }
+        
+        // Check if alias is in use
+        char currentServerName[kMaxServerAliasLength + 1];
+        strcpy(currentServerName, serverList[i].alias);
+        if (currentServerName != NULL){
             toLowerCase(alias); 
-            toLowerCase(tmpName);
+            toLowerCase(currentServerName);
 
-            if (strcmp(tmpName, alias) == 0){ // The same
+            if (strcmp(currentServerName, alias) == 0) { // Server name is already used
                 SysPrint(YEL, true, "[WARNING]: Cannot Create Server: Name Already In Use. (%s)", alias);
                 return -1;
             }
@@ -352,7 +382,6 @@ int MakeServer(
     }
     
     Server serv;
-    
     memset(&serv, 0, sizeof(Server));
 
     // Set the server properties to be created
@@ -363,21 +392,20 @@ int MakeServer(
     serv.maxClients = maxClients;
     serv.isRoot     = false;
     strcpy(serv.alias, alias);
-
     
     // Tell root server to host a server
-    RootResponse response = MakeRootRequest(k_cfMakeNewServer, serv, *client, (CMessage){0});
+    RootResponse response = MakeRootRequest(k_cfMakeNewServer, serv, *localClient, (CMessage){0});
     if (response.rcode == k_rcRootOperationSuccessful)
-        printf(GRN "Server '%s' Created on Port %i\n", serv.alias, serv.port);
+        SysPrint(CYN, false, "Server '%s' Created on Port '%i'\n", serv.alias, serv.port);
     else
-        printf(RED "Error Creating Server. Error Code %i\n", errno);
+        SysPrint(RED, false, "Error Making Server '%s'\n", serv.alias);
 
     return response.rcode;
 }
 
-bool IsUserHost(User* user, Server* server)
+bool IsUserHost(User user, Server* server)
 {
-    return user == server->host;
+    return (strcmp(user.handle, server->host->handle) == 0);
 }
 
 void ShutdownServer(char* alias)
@@ -418,7 +446,6 @@ void ShutdownServer(char* alias)
     printf("Closing server socket and freeing memory... ");
 
     close(server->sfd);
-    free(server);
     printf("Done\n");
     printf("Server closed successfully... Done\n");
 }
@@ -437,6 +464,60 @@ int SendServerMessage(Server* server, char* message)
     }
 }
 
+void EncryptClientMessage(CMessage* message)
+{
+    // TODO: Use aes lib
+
+    int xorConstant = message->cflag;
+
+    for (int charIndex=0; charIndex<strlen(message->message); charIndex++)
+    {
+        message->message[charIndex] = message->message[charIndex] ^ xorConstant;
+    }
+}
+
+ResponseCode DoServerRequest(void* request)
+{
+    ServerRequest* serverRequest = (ServerRequest*)request;
+    User sender = serverRequest->requestMaker;
+    
+    ResponseCode responseStatus = k_rcInternalServerError;
+
+    switch (serverRequest->command)
+    {
+    case k_cfKickClientFromServer:
+        DisconnectClientFromServer(&sender);
+        break;
+    case k_cfEchoClientMessageInServer:
+        Server* connectedServer = sender.connectedServer;
+
+        EncryptClientMessage(&serverRequest->optionalClientMessage);
+
+        // relay encrypted message to all connected clients
+        for (int ci = 0; ci < connectedServer->connectedClients; ci++)
+        {
+            if (sender.cfd == connectedServer->clientList[ci]->cfd)
+                continue; // Dont send the message to the client who sent the message
+
+            int sentBytes = send(connectedServer->clientList[ci]->cfd,
+                                 (void*)&serverRequest->optionalClientMessage, 
+                                 sizeof(serverRequest->optionalClientMessage), 0);    
+        }
+
+        responseStatus = k_rcRootOperationSuccessful;
+
+        // Send the response status back to the user
+        int sent = send(sender.cfd, (void*)&responseStatus, sizeof(responseStatus), 0);
+        // todo: handle error situtations
+
+        break;
+    default:
+        break;
+    }
+
+    return responseStatus;
+}
+
 int RelayClientSentMessage(
     Server* server,
     char* message, 
@@ -447,36 +528,15 @@ int RelayClientSentMessage(
     if (server->connectedClients <= 0)
         return -1;
 
-    // Client isnt connected to the server they wish to relay the message in
-    if (strcmp(op->connectedServer->alias, server->alias) != 0)
-        return -1;
-    
-    // Prepare to send message using custom struct
-    CMessage relayedMessage = {0};
-    relayedMessage.cflag = k_cfPrintEchodClientMessage;
-    relayedMessage.sender = op;
-    strcpy(relayedMessage.message, message);
+    CMessage cmsg = {0};
+    cmsg.cflag = k_cfPrintEchodClientMessage;
+    cmsg.sender = op;
+    strcpy(cmsg.message, message);
+    ResponseCode requestStatus = MakeServerRequest(k_cfEchoClientMessageInServer, *op, cmsg, *server);
+  
+    if (requestStatus == k_rcRootOperationSuccessful)
+        return 0;
 
-    printf("Before\n");
-
-    for (int c_index = 0; c_index < server->connectedClients; c_index++)
-    {
-        User* connectedUser = server->clientList[c_index];
-        // TODO: Uncomment this. Commented for debugging
-        if (strcmp(connectedUser->handle, op->handle) == 0)
-            continue;
-        int sentBytes = send(connectedUser->cfd, (void*)&relayedMessage, sizeof(relayedMessage), 0);
-    }
-    printf("Good\n");
-    // int sentBytes = send(op->cfd, (void*)&relayedMessage, sizeof(relayedMessage), MSG_NOSIGNAL);
-    // if (errno == EPIPE) {
-    //     printf("recovered from epipe. cfd %i\n", op->cfd);
-    //     return -1;
-    // }
-    // if (sentBytes <= 0) {
-    //     printf("error sending. errno %i\n", errno);
-    //     return -1; // Error sending message
-    // }
-
-    return 0;
+    return -1;
 }
+

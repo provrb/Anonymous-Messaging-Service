@@ -12,13 +12,15 @@
 int main() {
     // IMPORTANT DONT DELETE
     MallocClient(); // allocate memory for client using memset
+    AssignDefaultHandle(localClient->handle);
     signal(SIGINT, DisconnectClient);
-
-    AssignDefaultHandle(client->handle);
+    
+    ChooseClientHandle();
+    
+    printf("\nWelcome to AMS, %s\n", localClient->handle);
 
     // First connect to the main server to view all servers
     // strcpy(client->handle, Client_AssignDefaultHandle());
-    printf("Welcome to AMS, %s\n", client->handle);
     if (ConnectToRootServer() == -1) {
         printf("Aborting... Done\n"); 
         return -1;

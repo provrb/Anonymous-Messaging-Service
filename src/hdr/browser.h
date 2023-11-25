@@ -21,18 +21,33 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include "server.h"
 #include "ccmds.h"
 #include "cli.h"
-#include "server.h"
 #include "ccolors.h"
 
 extern unsigned int onlineServers; // Number of online servers
 extern Server       serverList[kMaxServersOnline]; // List of all online servers
 
-// Add a server to serverList
+/*
+    Add a server to the server list.
+
+    Once the server is added to the server list
+    it will be viewable by clients and joinable.
+    All information about the server will be copied
+    and saved into the list.
+*/
 int AddServerToList(Server server);
 
-// Set the current serverList to the most updated serverList
+/*
+    Update the server list client-side.
+
+    Make a request to the root server asking for
+    the most updated server list that is currently
+    saved on the root application.
+
+    The server list is updated automatically and returned.
+*/
 Server* UpdateServerList(); 
 
 #endif // __BROWSER__

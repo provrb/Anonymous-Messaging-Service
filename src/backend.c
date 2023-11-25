@@ -131,12 +131,12 @@ RootResponse MakeRootRequest(
  * Settings reset every session.z
  * 
  */
-CommandFunction EnableDebugMode(){    
-    DEBUG = !DEBUG;
-    (DEBUG ? SysPrint(YEL, true, "Debug Mode On.", DEBUG) : SysPrint(YEL, true, "Debug Mode Off.") ); 
-}
+// void EnableDebugMode(){    
+//     DEBUG = !DEBUG;
+//     (DEBUG ? SysPrint(YEL, true, "Debug Mode On.", DEBUG) : SysPrint(YEL, true, "Debug Mode Off.") ); 
+// }
 
-CommandFunction ExitApp(){ 
+void ExitApp(){ 
     DisconnectClient();
     SysPrint(CYN, true, "Exiting Application.");
     exit(EXIT_SUCCESS); 
@@ -149,7 +149,7 @@ CommandFunction ExitApp(){
  * Used with commands and arguements.
  * 
  */
-void JoinServer(Server* server) {
+void* JoinServer(Server* server) {
     int cfd = socket(server->domain, server->type, server->protocol);
     if (cfd < 0){
         SysPrint(RED, true, "Failed to create client socket. Errno %i", errno);
@@ -162,14 +162,27 @@ void JoinServer(Server* server) {
         return NULL;
     }
 
-    client->caddr = server->addr;
-    client->cfd = cfd;
-    client->connectedServer = server;
+    localClient->caddr = server->addr;
+    localClient->cfd = cfd;
+    localClient->connectedServer = server;
 
-    Chatroom(client->connectedServer);
+    printf("about to enter chat room: %s\n", localClient->handle);
+    User dereferenceClient = *localClient;
+
+    // Send client info to server you're joining
+    int sentBytes = send(cfd, (void*)&dereferenceClient, sizeof(dereferenceClient), 0);
+    
+    // TODO: HANDLE SITUATIONS THAT SEND BREAKS
+
+    // Receive most updated server info
+    Server updatedServer = {0};
+    int recvBytes = recv(cfd, (void*)&updatedServer, sizeof(Server), 0);
+    localClient->connectedServer = &updatedServer;
+
+    Chatroom(&updatedServer);
 }
 
-CommandFunction* JoinServerByName(void* name){ // Join server from its alias
+void* JoinServerByName(void* name){ // Join server from its alias
     UpdateServerList();
     Server* server = ServerFromAlias((char*)name);
     if (!server) { // ServerFromAlias returns null if no server is found
@@ -180,7 +193,7 @@ CommandFunction* JoinServerByName(void* name){ // Join server from its alias
     JoinServer(server);
 }
 
-CommandFunction* JoinServerByListIndex(int index) {
+void* JoinServerByListIndex(int index) {
 
     // Check if its a valid index
     // Less than 0

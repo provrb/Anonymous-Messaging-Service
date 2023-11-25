@@ -17,6 +17,15 @@
  */
 
 #include "hdr/cli.h"
+#include "hdr/client.h"
+
+
+/*
+    By default, the user interface is not laoded.
+    Changed when LoadClientUserInterface is called
+*/
+bool userInterfaceLoaded = false;
+
 
 /**
  * @brief           Prints to the console with a prefix. Wrapper for printf
@@ -48,20 +57,26 @@ void SysPrint(const char* color, bool prefixNewline, const char* str, ...) {
  * @return          void*: Needed for threading
  * @retval          Does not return anything.
  */
-void* UI() {
-    SplashScreen();
-    pthread_t cmd_tid;
+void LoadClientUserInterface() {
+    if (!userInterfaceLoaded)
+    {
+        userInterfaceLoaded = true;
 
-    DisplayCommands(); // Display commands when you load up
-    
-    // Create a thread to handle client inpuit
-    if (pthread_create(&cmd_tid, NULL, HandleClientInput, NULL) != 0){
-        SysPrint(RED, true, "*** ERROR CREATING HandleClientInput() THREAD. EXITING APPLICATION. ***");
-        exit(EXIT_FAILURE);
+        DefaultClientConnectionInfo();
+        SplashScreen();
+
+        DisplayCommands(); // Display commands when you load up
+        
+        // Create a thread to handle client inpuit
+        pthread_t cmd_tid;
+        if (pthread_create(&cmd_tid, NULL, HandleClientInput, NULL) != 0){
+            SysPrint(RED, true, "*** ERROR CREATING HandleClientInput() THREAD. EXITING APPLICATION. ***");
+            ExitApp();
+        }
+
+        pthread_join(cmd_tid, NULL);
+        pthread_exit(&cmd_tid);
     }
-
-    pthread_join(cmd_tid, NULL);
-    pthread_exit(&cmd_tid);
 }
 
 /**
@@ -69,14 +84,12 @@ void* UI() {
  * @return          int
  * @retval          represents success
  */
-int SplashScreen() {
+void SplashScreen() {
     struct tm* timestr = gmt();
     printf(CYN "\nWelcome to AMS! The Time Is: %02d:%02d:%02d UTC\n", timestr->tm_hour, timestr->tm_min, timestr->tm_sec);
     printf("  - Search and create your own servers.\n");
     printf("  - Chat completely anonymously.\n");
     printf("  - No saved data. All chat logs deleted. \n" RESET);
-
-    return 0;
 }
 
 /**
@@ -84,7 +97,7 @@ int SplashScreen() {
  * @return          int
  * @retval          success
  */
-int DisplayServers() {
+void DisplayServers() {
 
     UpdateServerList();
 
@@ -97,8 +110,6 @@ int DisplayServers() {
         Server server = serverList[servIndex];
         printf("\t[%i] - [%i/%i]: %s\n", servIndex+1, server.connectedClients, server.maxClients, server.alias);
     }
-
-    return 0;
 }
 
 /**
@@ -106,7 +117,7 @@ int DisplayServers() {
  * @return          int
  * @retval          represents success
  */
-int DisplayCommands() {
+void DisplayCommands() {
     int maxCommandLength = 0;
 
     // Find the maximum length of commandName to align the command names
@@ -123,39 +134,56 @@ int DisplayCommands() {
     for (int i = 0; i < numOfCommands; i++) {
         printf("\t%-*s : %s\n", maxCommandLength, validCommands[i].commandName, validCommands[i].cmdDesc);
     }
-            
-    return 0;
 }
 
-int Chatroom(Server* server) {
-
-    // Clear previous terminal output
+void ClearOutput()
+{
 #ifdef _WIN64
     system("cls")
 #elif __linux__
     system("clear");
 #endif
-    
-    SERVER_PRINT(CYN, "You are now connected to '%s'\n", server->alias);
+}
+
+void DisableTerminalInput() {
+    system("stty -echo");
+}
+
+void EnableTerminalInput() {
+    system("stty echo");
+}
+
+int Chatroom(Server* server) {
+
+    // Clear previous terminal output
+    ClearOutput();
+    SERVER_PRINT(CYN, "You are now connected to '%s'", server->alias);
+    SERVER_PRINT(CYN, "Use '--leave' to Disconnect.\n");
 
     // Create thread to print other client messages to the screen
     pthread_t tid;
-    if (pthread_create(&tid, NULL, RecvClientMessages, (void*)server) < 0) {
+    if (pthread_create(&tid, NULL, ReceiveMessageFromServer, (void*)server) < 0) {
         printf("Internal server error. Aborting.\n");
         return -1;
     }
 
-    // Send messages
-    bool sentMessage = false;
+    /*
+        Take input from the local client.
+
+        Send input as a message to all other clients in the server
+        unless it is a command. i.e --leave; don't see '--leave' to the other clients.
+    */
     while (1)
     {
+        EnableTerminalInput();
         char* message = malloc(kMaxClientMessageLength);
         if (message == NULL)
             break;
 
         printf("msg> "); // message prompt
         fgets(message, kMaxClientMessageLength, stdin);
-        
+        DisableTerminalInput();
+
         // Remove the trailing newline character if it exists
         if (message[strlen(message) - 1] == '\n') {
             message[strlen(message) - 1] = '\0';
@@ -164,16 +192,34 @@ int Chatroom(Server* server) {
         if (strlen(message) < 0)
             continue;
 
-        if (RelayClientSentMessage(server, message, client) == -1)
-            printf("ERROR\n");
+        if (strcmp(message, "--leave") == 0)
+        {
+            ResponseCode leaveRequest = MakeServerRequest(k_cfKickClientFromServer, *localClient, (CMessage){0}, *server);
+            break;
+        }
+
+        CMessage cmsg = {0};
+        cmsg.cflag    = k_cfEchoClientMessageInServer;
+        cmsg.sender   = localClient;
+        strcpy(cmsg.message, message);
+        
+        ResponseCode requestStatus = MakeServerRequest(k_cfEchoClientMessageInServer, *localClient, cmsg, *server);
         
         printf("\x1b[1A");
         printf("\x1b[2K");
         printf("\r");
-        // printf("You(%s): %s\n", client->handle, message);
+        
+        if (requestStatus == k_rcInternalServerError)
+            printf(RED "Failed to Send Message.\n" RESET);
+        else
+            printf("%s: %s\n", localClient->handle, cmsg.message);
+        
+        sleep(1);
     }
 
-    printf("ENDING\n");
+    ClearOutput();
+    SysPrint(CYN, false, "Disconnected From the Server '%s'", server->alias);
+    SplashScreen();
     return 0;
 }
 
@@ -183,26 +229,25 @@ int Chatroom(Server* server) {
  * @return          int
  * @retval          Success code
  */
-int DisplayServerInfo(char* serverName) {
+void DisplayServerInfo(char* serverName) {
     UpdateServerList();
     Server* server = ServerFromAlias(serverName);
     
-    if (server == NULL){
+    if (server == NULL) 
+    {
         SysPrint(RED, true, "No Server Found With Name '%s'", serverName);
-        return -1;
     }
-
-    SysPrint(UNDR WHT, true, "Found Information on Server '%s'. Displaying:", serverName);
-    
-    printf("\tDomain            : %i\n", server->domain);
-    printf("\tType              : %i\n", server->type);
-    printf("\tProtocol          : %i\n", server->protocol);
-    printf("\tPort              : %i\n", server->port);
-    printf("\tConnected Clients : %i\n", server->connectedClients);
-    printf("\tMax Clients       : %i (%i/%i)\n", server->maxClients, server->connectedClients, server->maxClients);
-    printf("\tServer Alias/Name : %s\n", server->alias);        
-
-    return 0;
+    else
+    {
+        SysPrint(UNDR WHT, true, "Found Information on Server '%s'. Displaying:", serverName);
+        printf("\tDomain            : %i\n", server->domain);
+        printf("\tType              : %i\n", server->type);
+        printf("\tProtocol          : %i\n", server->protocol);
+        printf("\tPort              : %i\n", server->port);
+        printf("\tConnected Clients : %i\n", server->connectedClients);
+        printf("\tMax Clients       : %i (%i/%i)\n", server->maxClients, server->connectedClients, server->maxClients);
+        printf("\tServer Alias/Name : %s\n", server->alias);        
+    }
 }
 
 /**
@@ -210,9 +255,8 @@ int DisplayServerInfo(char* serverName) {
  * @return          int
  * @retval          0
  */
-int TotalOnlineServers() {
+void TotalOnlineServers() {
     UpdateServerList();
     SysPrint(WHT UNDR, true, "There Are %i Online Servers", onlineServers);
-    return 0;
 }
 

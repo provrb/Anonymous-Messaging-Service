@@ -1,8 +1,53 @@
+
 #include "hdr/client.h"
 #include "hdr/ccolors.h"
 
+User*  localClient = {0}; // Current client who ran the app
+
 void MallocClient() {
-    client = (User*)malloc(sizeof(User));
+    localClient = (User*)malloc(sizeof(User));
+}
+
+void DecryptPeerMessage(CMessage* message)
+{
+    for (int charIndex = 0; charIndex<strlen(message->message); charIndex++)
+    {
+        message->message[charIndex] = message->message[charIndex] ^ message->cflag;
+    }
+}
+
+
+ResponseCode MakeServerRequest(
+    CommandFlag command,
+    User        requestMaker,
+    CMessage    optionalClientMessage,
+    Server      server
+)
+{
+    ServerRequest request         = {0};
+    request.command               = command;
+    request.optionalClientMessage = optionalClientMessage;
+    request.requestMaker          = requestMaker;
+
+    ResponseCode response;
+
+    int sentBytes = send(requestMaker.cfd, (void*)&request, sizeof(request), 0);
+    // todo: handle situation.. too lazy
+
+    // Don't received on connected server socket if we left the server
+    if (request.command != k_cfKickClientFromServer)
+    {
+        int recvBytes = recv(optionalClientMessage.sender->cfd, (void*)&response, sizeof(ResponseCode), 0);
+        // todo: handle situation.. too lazy        
+    }
+    else 
+    {
+        // Client left the server so remove connectedServer
+        localClient->connectedServer = (Server*){0};
+        localClient->cfd = 0;
+    }
+
+    return response;
 }
 
 size_t ClientIndex(const User* arr[], size_t size, User* value)
@@ -14,19 +59,14 @@ size_t ClientIndex(const User* arr[], size_t size, User* value)
     }
 
     return -1;
-    // size_t index = 0;
-
-    // while ( index < size && arr[index] != value ) ++index;
-
-    // return ( index == size ? -1 : index );
 }
 
 void DisconnectClient(){
     // Remove client from root connected clients
 
-    SysPrint(WHT, true, "Disconnecting %s", client->handle);
-    client->removeMe = true;
-    RootResponse response = MakeRootRequest(k_cfDisconnectClientFromRoot, rootServer, *client, (CMessage){0});
+    SysPrint(WHT, true, "Disconnecting %s", localClient->handle);
+    localClient->removeMe = true;
+    RootResponse response = MakeRootRequest(k_cfDisconnectClientFromRoot, rootServer, *localClient, (CMessage){0});
     if (response.rcode = k_rcRootOperationSuccessful){
         SysPrint(GRN, false, "Disconnected. Goodbye");
     }
@@ -34,13 +74,15 @@ void DisconnectClient(){
     exit(EXIT_SUCCESS);
 }
 
-void RecvClientMessages(void* serverInfo)
+void ReceiveMessageFromServer(void* serverInfo)
 {
     Server* server = (Server*)serverInfo;
     while (1)
     {
         CMessage receivedCMessage = {0};
-        int receivedBytes = recv(client->cfd, (void*)&receivedCMessage, sizeof(receivedCMessage), 0);
+        int receivedBytes = recv(localClient->cfd, (void*)&receivedCMessage, sizeof(receivedCMessage), 0);
+
+        DecryptPeerMessage(&receivedCMessage);
 
         // todo: handle situation
         if (receivedBytes <= 0)
@@ -48,14 +90,16 @@ void RecvClientMessages(void* serverInfo)
 
         switch (receivedCMessage.cflag)
         {
+        case k_cfUpdateServerWithNewINfo:
+            
+            break;
         case k_cfPrintEchodClientMessage:
             printf("%s: %s\n", receivedCMessage.sender->handle, receivedCMessage.message);
             break;
- 
         // TODO: Handle situation
         case k_cfKickClientFromServer:
             printf("You have been kicked from '%s'...\n", server->alias);
-            MakeRootRequest(k_cfKickClientFromServer, *server, *client, (CMessage){0});
+            MakeRootRequest(k_cfKickClientFromServer, *server, *localClient, (CMessage){0});
             break;
         case k_cfBanClientFromServer:
             break;
@@ -67,90 +111,94 @@ void RecvClientMessages(void* serverInfo)
 }
 
 /**
- * @brief           Handle input by the user and treat it as a app command
+ * @brief           Handle clientinput by the user and treat it as a app command
  * @return          void*
  * @retval          Nothing.
  */
 void* HandleClientInput(){
-    bool prnt = true;
     while (1) {
         char cmd[100];
-        bool successCmd = false;
+        bool validCmd = false;
 
-        if (prnt) {
-            printf("Enter Command> ");
-            prnt = false;
-        }
+        printf("Enter Command> ");
 
         fgets(cmd, kMaxCommandLength, stdin);
 
-        if (strlen(cmd) == 0) {
-            continue; // Skip processing if the command is empty
+        // Remove the trailing newline character if it exists
+        if (cmd[strlen(cmd) - 1] == '\n') {
+            cmd[strlen(cmd) - 1] = '\0';
         }
 
-        printf("You inputted: %s\n", cmd);
+        // Command is empty, don't need to process anything
+        if (strlen(cmd) == 0) {
+            continue;
+        }
 
-        // Find command function
-        for (int i = 0; i < numOfCommands; i++) {
-            // Server info command. It takes command-line arguments
-            if (strstr(cmd, "--si") != NULL) {
-                char serverName[kMaxServerAliasLength + 1];
+        /*
+        *
+        * All functions that take command line arguemnts
+        * In a case a function takes a command line argument,
+        * it must be processed specially like below
+        * 
+        */
 
-                if (sscanf(cmd, "--si %32s", serverName) != 1) {
-                    SysPrint(RED, true, "Invalid Usage for --si. View --help for more info.");
-                    break;
-                }
+        // Server info command. It takes command-line arguments
+        if (strstr(cmd, "--si") != NULL) {
+            char serverName[kMaxServerAliasLength + 1];
 
-                DisplayServerInfo(serverName);
-
-                successCmd = true;
-                break;
+            if (sscanf(cmd, "--si %32s", serverName) != 1) {
+                SysPrint(RED, true, "Invalid Usage for --si. View --help for more info.");
+                continue;
             }
 
-            // Join server command. It takes command-line arguments
-            if (strstr(cmd, "--joins") != NULL) {
-                char serverName[kMaxServerAliasLength + 1];
+            DisplayServerInfo(serverName);
+            validCmd = true;
+        }
 
-                if (sscanf(cmd, "--joins %32s", serverName) != 1) {
-                    SysPrint(RED, true, "Invalid Usage for --joins. View --help for more info.");
-                    break;
-                }
+        // Join server command. It takes command-line arguments
+        else if (strstr(cmd, "--joins") != NULL) {
+            char serverName[kMaxServerAliasLength + 1];
 
-                JoinServerByName(serverName);
-
-                successCmd = true;
-                break;
+            if (sscanf(cmd, "--joins %32s", serverName) != 1) {
+                SysPrint(RED, true, "Invalid Usage for --joins. View --help for more info.");
+                continue;
             }
 
-            if (strstr(cmd, "--makes") != NULL) {
-                char serverName[kMaxServerAliasLength + 1];
-                unsigned int maxClients;
-                unsigned int port;
+            printf("sounds good: %s\n", localClient->handle);
+            JoinServerByName(serverName);
+            validCmd = true;
+        }
 
-                if (sscanf(cmd, "--makes %32s %u %u", serverName, &port, &maxClients) != 3) {
-                    SysPrint(RED, true, "Invalid Usage for --makes. View --help for more info.");
-                    break;
-                }
+        else if (strstr(cmd, "--makes") != NULL) {
+            char         serverName[kMaxServerAliasLength + 1];
+            unsigned int maxClients;
+            unsigned int port;
 
-                printf("OK. Making Server '%s' on Port %i. Max clients : %i\n", serverName, port, maxClients);
-
-                int serverCreated = MakeServer(AF_INET, SOCK_STREAM, 0, port, maxClients, serverName);
-                successCmd = true;
-                break;
+            if (sscanf(cmd, "--makes %32s %u %u", serverName, &port, &maxClients) != 3) {
+                SysPrint(RED, true, "Invalid Usage for --makes. View --help for more info.");
+                continue;
             }
 
-            // Normal command function without command-line args
+            SysPrint(CYN, true, "Making Server '%s' on Port '%i'", serverName, port);
+
+            int serverCreated = MakeServer(AF_INET, SOCK_STREAM, 0, port, maxClients, serverName);
+            validCmd = true;
+        }
+
+        // Normal command function without command-line args
+        for (int i = 0; i < numOfCommands; i++)
+        {
             if (strcmp(cmd, validCommands[i].commandName) == 0) {
                 validCommands[i].function();
-                successCmd = true;
+                validCmd = true;
                 break;
             }
         }
-        if (successCmd) prnt = true;
 
-        if (!successCmd) {
+        if (!validCmd)
+        {
             SysPrint(RED, true, "Unknown Command. Enter --help to view commands.");
-            prnt = true;
+            continue;
         }
     }
 
@@ -199,10 +247,10 @@ void ChooseClientHandle() {
         }
 
         goodUsername=true;
-        strcpy(client->handle, username);
+        strcpy(localClient->handle, username);
     } while(!goodUsername);
 
-    SysPrint(CYN, false, "You will now be known as: '%s' for this session.", client->handle);
+    SysPrint(CYN, false, "You will now be known as: '%s' for this session.", localClient->handle);
 }
 
 void AssignDefaultHandle(char defaultName[]) {
@@ -214,4 +262,13 @@ void AssignDefaultHandle(char defaultName[]) {
 
     strcpy(defaultName, "usr");
     strcat(defaultName, nameIdentifier);
+}
+
+int DefaultClientConnectionInfo() {
+    localClient->removeMe = false;
+    localClient->joined = gmt();
+    localClient->caddr = rootServer.addr;
+    localClient->cfd = 0;
+    localClient->rfd = rootServer.sfd;
+    return 0;
 }
