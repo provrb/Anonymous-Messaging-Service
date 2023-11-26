@@ -1,3 +1,21 @@
+/**
+ * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
+ * @file       client.h
+ * @brief      control everything about clients
+ * 
+ * @note       
+ * @history:
+ *   Version   Date            Author          Modification    Email
+ *   V1.0.0    Oct-06-2023     Ethan Oliveira                  ethanjamesoliveira@gmail.com
+ * 
+ * @verbatim
+ * ==============================================================================
+ * 
+ * ==============================================================================
+ * @endverbatim
+ * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
+ */
+
 #ifndef __CLIENT_H__
 #define __CLIENT_H__
 
