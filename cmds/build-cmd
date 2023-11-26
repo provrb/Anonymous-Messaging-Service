@@ -1,8 +1,0 @@
-Command to build AMS
-
-cd /media/ethan/23CDDC4829020F3D/the-anonymous-messaging-service/src
-cat ../cmds/bld-main | xargs -o gcc
-cat ../cmds/bld-root | xargs -o gcc
-
-Run AMS
-../build/main
