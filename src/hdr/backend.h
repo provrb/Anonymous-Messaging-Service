@@ -70,7 +70,7 @@ void ExitApp();
     A couple different ways for a user to join a server.
     All of them achieve the same goal.
 */
-void*  JoinServer(Server* server); // Join a server from 'Server' struct
+void* JoinServer(Server* server); // Join a server from 'Server' struct
 void* JoinServerByName(void* name); // Join server from servers alias
 void* JoinServerByListIndex(int index); // Join server from index in the server list
 

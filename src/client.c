@@ -2,9 +2,9 @@
 #include "hdr/client.h"
 #include "hdr/ccolors.h"
 
-User*  localClient = {0}; // Current client who ran the app
+User* localClient = { 0 }; // Current client who ran the app
 
-void MallocClient() {
+void MallocLocalClient() {
     localClient = (User*)malloc(sizeof(User));
 }
 
@@ -20,8 +20,7 @@ void DecryptPeerMessage(CMessage* message)
 ResponseCode MakeServerRequest(
     CommandFlag command,
     User        requestMaker,
-    CMessage    optionalClientMessage,
-    Server      server
+    CMessage    optionalClientMessage
 )
 {
     ServerRequest request         = {0};
@@ -29,10 +28,15 @@ ResponseCode MakeServerRequest(
     request.optionalClientMessage = optionalClientMessage;
     request.requestMaker          = requestMaker;
 
-    ResponseCode response;
+    ResponseCode response = k_rcInternalServerError;
 
+    // Send the request to the conncted server
     int sentBytes = send(requestMaker.cfd, (void*)&request, sizeof(request), 0);
-    // todo: handle situation.. too lazy
+    if (sentBytes < 0) // Error sending message
+    {
+        SERVER_PRINT(RED, "Error Making Server Request");
+        return response;
+    }
 
     // Don't received on connected server socket if we left the server
     if (request.command != k_cfKickClientFromServer)
@@ -74,35 +78,79 @@ void DisconnectClient(){
     exit(EXIT_SUCCESS);
 }
 
-void ReceiveMessageFromServer(void* serverInfo)
+void LeaveConnectedServer()
+{
+    ResponseCode req = MakeServerRequest(k_cfKickClientFromServer,
+                                        *localClient,
+                                        (CMessage){0}
+                                        );
+
+    UpdateServerList();
+    
+    localClient->connectedServer = (Server*){0};
+    localClient->cfd = 0;
+}
+
+void ReceivePeerMessagesOnServer(void* serverInfo)
 {
     Server* server = (Server*)serverInfo;
+    
+    /*
+        Check if the local client is connected to the server
+        we want to receive messages on.
+    */
+    if (strcmp(server->alias, localClient->connectedServer) != 0) // Not on the server
+        return;
+
     while (1)
     {
-        CMessage receivedCMessage = {0};
+
+        /*
+            Receive encrypted messages from other clients
+            Decrypt them once received
+        */
+        CMessage receivedCMessage = { 0 };
         int receivedBytes = recv(localClient->cfd, (void*)&receivedCMessage, sizeof(receivedCMessage), 0);
-
-        DecryptPeerMessage(&receivedCMessage);
-
-        // todo: handle situation
-        if (receivedBytes <= 0)
+        if (receivedBytes < 0) // Error
             continue;
+        else if (receivedBytes == 0 && server->online) // Disconnected from seerver/Server went offline
+            break;
+        else if (receivedBytes == 0 && server->online == false) // Server was shutdown
+        {
+            SERVER_PRINT(YEL, "Server Was Shutdown. Quitting.");
+            LeaveConnectedServer();
+            break;
+        }
 
+        if (strlen(receivedCMessage.message) > 0)
+            DecryptPeerMessage(&receivedCMessage);
+
+        /*
+            Find out what the peer wants us to do with
+            the message. Map it to a command.
+        */
         switch (receivedCMessage.cflag)
         {
-        case k_cfUpdateServerWithNewINfo:
-            
-            break;
-        case k_cfPrintEchodClientMessage:
+        case k_cfPrintPeerClientMessage:
             printf("%s: %s\n", receivedCMessage.sender->handle, receivedCMessage.message);
             break;
-        // TODO: Handle situation
         case k_cfKickClientFromServer:
-            printf("You have been kicked from '%s'...\n", server->alias);
-            MakeRootRequest(k_cfKickClientFromServer, *server, *localClient, (CMessage){0});
-            break;
+            /*
+                Peer told server they want this specific user to be
+                kicked from the server.
+
+                Request the server to remove local client.
+            */
+            
+            LeaveConnectedServer();
+            SERVER_PRINT(RED, "You have been kicked from '%s'\n", server->alias);
+            return;
         case k_cfBanClientFromServer:
-            break;
+            // TODO: Add an array of banned clients to Server struct and add this user to it.
+            
+            LeaveConnectedServer();
+            SERVER_PRINT(RED, "You Have Been Banned From '%s'\n", server->alias);
+            return;
         default:
             break;
         }
@@ -186,9 +234,9 @@ void* HandleClientInput(){
         }
 
         // Normal command function without command-line args
-        for (int i = 0; i < numOfCommands; i++)
+        for (int i = 0; i < kNumOfCommands; i++)
         {
-            if (strcmp(cmd, validCommands[i].commandName) == 0) {
+            if (strcmp(cmd, validCommands[i].kCommandName) == 0) {
                 validCommands[i].function();
                 validCmd = true;
                 break;
@@ -226,8 +274,8 @@ void ChooseClientHandle() {
             username[strlen(username) - 1] = '\0';
         }
         
-        for (int i=0; i < numOfCommands; i++){
-            if (strstr(username, validCommands[i].commandName) != NULL) 
+        for (int i=0; i < kNumOfCommands; i++){
+            if (strstr(username, validCommands[i].kCommandName) != NULL) 
             {
                 SysPrint(YEL, true, "[WARNING]: Username cannot be a command.");
                 warned = true;
@@ -268,7 +316,122 @@ int DefaultClientConnectionInfo() {
     localClient->removeMe = false;
     localClient->joined = gmt();
     localClient->caddr = rootServer.addr;
+    localClient->connectedServer = (Server*){0};
     localClient->cfd = 0;
     localClient->rfd = rootServer.sfd;
     return 0;
+}
+
+/**
+ * @brief           Connect to the server which holds information about all other servers
+ * @return          int
+ * @retval          success
+ */
+int ConnectToRootServer() {
+    // Fill out information about the root server used to establish client connection.
+
+    printf("Filling root server struct... ");
+    
+    rootServer.domain     = AF_INET;
+    rootServer.type       = SOCK_STREAM;
+    rootServer.protocol   = 0;
+    rootServer.port       = ROOT_PORT;
+    rootServer.maxClients = -1;
+    rootServer.isRoot     = true;
+    strcpy(rootServer.alias, "__root__");
+
+    printf("Done\n");
+    printf("Creating client socket using port %i... ", rootServer.port);
+
+    // Connect client to server. Establish a connection
+
+    int cfd = socket(rootServer.domain, rootServer.type, rootServer.protocol); // These are the settings the root server uses
+    if (cfd < 0)
+        goto close_root_connection;
+    
+    rootServer.sfd = cfd;
+
+    printf("Done\n");
+    printf("Filling address info for client to connect... ");
+
+    // Address info for main server
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(struct sockaddr_in));
+    addr.sin_family = rootServer.domain;
+    addr.sin_port   = htons(rootServer.port); // Constant. Server will always be on this port
+
+    // For now it will run on local machine
+    if (inet_pton(rootServer.domain, "127.0.0.1", &addr.sin_addr) < 0)
+        goto close_root_connection;
+    
+    printf("Done\n");
+    fprintf(stderr, "Connecting client socket to main server... ");
+    // Attempt to retry connection again if it fails.
+
+    int attempts = 0;
+    do {
+        int con = connect(cfd, (struct sockaddr*)&addr, sizeof(addr));
+        if (con < 0) {
+            attempts++;
+            sleep(2);
+            continue;
+        }
+        break;
+    }
+    while (attempts < 5);
+    if (attempts >= 5) goto close_root_connection;
+
+    printf("Done\n");
+    printf("Client connected to main server.\n");
+    printf("Filling out local client info struct... ");
+   
+    // Fill out local client info struct
+    // Handle already filled out at start of program
+    DefaultClientConnectionInfo();
+
+    printf("Done\n");
+    
+    // Send client info
+    RootRequest req       = {0};
+    req.clientSentMessage = (CMessage){0}; // No Client Message.
+    req.cmdFlag           = k_cfConnectClientToServer;
+    req.server            = rootServer;
+    req.user              = *localClient;
+    int sendInfo = send(rootServer.sfd, (const void*)&req, sizeof(req), 0);
+
+    printf("Sent current user info. Now trying to recv.\n");
+
+    // Save user handle as it turns to garbage memory when new info is received.
+    char tempHandle[kMaxClientHandleLength];
+    strcpy(tempHandle, localClient->handle);
+
+    // Get response to update user info
+    RootResponse resp = {0};
+    int recvInfo = recv(rootServer.sfd, (void*)&resp, sizeof(resp), 0);
+
+    printf("Received updated user info.\n");
+
+    if (resp.rcode == k_rcRootOperationSuccessful && resp.rflag == k_rfRequestedDataUpdated)
+    {
+        // Update the client with info from the root server
+        User* updatedClient = (User*)&resp.returnValue;
+        localClient = updatedClient;
+
+        // Get rid of junk username that was applied when we updated the user
+        // Make it the original username that was selected
+        strcpy(localClient->handle, tempHandle);
+
+        // Success
+        return 0;
+    }
+
+    goto close_root_connection;
+
+// Error
+close_root_connection:
+    printf("Failed\n");
+    printf(RED "Failed to connect to main servers. Error code %i, %i attempts\n" RESET, errno, attempts);
+    close(cfd);
+    return -1;
 }

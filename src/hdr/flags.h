@@ -21,12 +21,11 @@ typedef enum CommandFlags
     k_cfConnectClientToServer = 932, // User joined specifed server
     k_cfBanClientFromServer = 482, // Ban a client from the server. Must be host
     k_cfKickClientFromServer = 423, // Remove client from the server. Must be host
-    k_cfUpdateClientInfoInServer = 548, // Update a User* struct in a server client list
     k_cfAddClientToServer = 10023, // Add client to server list
 
     // Message command
     k_cfEchoClientMessageInServer  = 1840, // Send message from client to all clients in server 
-    k_cfPrintEchodClientMessage = 1323, // Receive a message from client in a server and print it out
+    k_cfPrintPeerClientMessage = 1323, // Receive a message from client in a server and print it out
 } CommandFlag;
 
 

@@ -1,5 +1,5 @@
 /**
- * ****************************(C) COPYRIGHT {2023} Blue Bear****************************
+ * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  * @file       ccmds.h
  * @brief      Client commands used in the cli
  * 
@@ -13,11 +13,11 @@
  * 
  * ==============================================================================
  * @endverbatim
- * ****************************(C) COPYRIGHT {2023} Blue Bear****************************
+ * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  */
 
-#ifndef __INTERFACE_H_
-#define __INTERFACE_H_
+#ifndef __INTERFACE_H__
+#define __INTERFACE_H__
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,7 +36,7 @@ typedef void (*CommandFunction)();
     A structure representing a typeable command
     for the client.
 
-    A client can enter 'commandName' to perform a command,
+    A client can enter 'kCommandName' to perform a command,
     provided that the arguments are all entered correctly.
     
     If 'function' is null, it means the function takes
@@ -44,12 +44,22 @@ typedef void (*CommandFunction)();
     'CommandFunction'' function like in the struct below.
 */
 typedef struct CMD {
-    const char* commandName;
+    const char* kCommandName;
     char* cmdDesc;
     CommandFunction function;    
 } Command; 
 
-extern Command   validCommands[]; // A list of valid command structs that can be ran by client in cli
-extern const int numOfCommands; // The number of valid commands
+/*
+    Array of 'Command' structs that 
+    represent valid commands 
+    the local client can input and run.
+*/
+extern Command   validCommands[];
 
-#endif // __INTERFACE_H_
+/*
+    Number of valid commands.
+    Essentially the length of 'validCommands' array.
+*/
+extern const int kNumOfCommands;
+
+#endif // __INTERFACE_H__

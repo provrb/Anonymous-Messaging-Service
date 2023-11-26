@@ -1,5 +1,5 @@
 /**
- * ****************************(C) COPYRIGHT {2023} Blue Bear****************************
+ * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  * @file       ccmds.h
  * @brief      Client commands used in the cli
  * 
@@ -13,7 +13,7 @@
  * 
  * ==============================================================================
  * @endverbatim
- * ****************************(C) COPYRIGHT {2023} Blue Bear****************************
+ * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  */
 
 #include "hdr/ccmds.h"
@@ -34,4 +34,4 @@ Command validCommands[] = {
     {"--makes <server-name> <port> <max-clients>", "Make a Server With Specified Name", NULL}
 };
 
-const int numOfCommands = sizeof(validCommands) / sizeof(validCommands[0]);
+const int kNumOfCommands = sizeof(validCommands) / sizeof(validCommands[0]);

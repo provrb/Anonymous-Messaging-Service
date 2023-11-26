@@ -153,13 +153,13 @@ void* JoinServer(Server* server) {
     int cfd = socket(server->domain, server->type, server->protocol);
     if (cfd < 0){
         SysPrint(RED, true, "Failed to create client socket. Errno %i", errno);
-        return NULL;
+        return;
     }
 
     int cnct = connect(cfd, (struct sockaddr*)&server->addr, sizeof(server->addr));
     if (cnct < 0){
         SysPrint(RED, true, "Failed to Connect to Server. Error %i", errno);
-        return NULL;
+        return;
     }
 
     localClient->caddr = server->addr;
@@ -187,7 +187,7 @@ void* JoinServerByName(void* name){ // Join server from its alias
     Server* server = ServerFromAlias((char*)name);
     if (!server) { // ServerFromAlias returns null if no server is found
         SysPrint(RED, true, "No Server Found With That Name.");
-        return NULL;
+        return;
     }
 
     JoinServer(server);
@@ -198,11 +198,11 @@ void* JoinServerByListIndex(int index) {
     // Check if its a valid index
     // Less than 0
     if (index < 0)
-        return NULL;
+        return;
 
     // Greater than the amount of servers online
     if (index >= onlineServers)
-        return NULL;
+        return;
 
     // Valid index, join server
     Server* server = &serverList[index];

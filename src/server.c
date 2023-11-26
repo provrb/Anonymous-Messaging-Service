@@ -58,7 +58,7 @@ void* ServerRecvThread(void* serverInfo)
             for (int ci = 0; ci < server->connectedClients; ci++)
             {
                 CMessage relayThisMessage = {0};
-                relayThisMessage.cflag    = k_cfPrintEchodClientMessage;
+                relayThisMessage.cflag    = k_cfPrintPeerClientMessage;
                 relayThisMessage.sender   = message.sender;
 
 
@@ -104,7 +104,7 @@ void RecvMessages(void* serverInfo)
                         continue;
 
                     // VITAL: Tell the client we want them to recv and print it out
-                    message.cflag = k_cfPrintEchodClientMessage;
+                    message.cflag = k_cfPrintPeerClientMessage;
 
                     int sentBytes = sendto(connectedClient->cfd, (void*)&message, sizeof(message), 0, (struct sockaddr*)&connectedClient->caddr, sizeof(connectedClient->caddr));
                     // TODO: handle sendto error situations            
@@ -176,7 +176,7 @@ void* ServerAcceptThread(void* serverInfo)
     if (lstn < 0) {
         printf("listen: errno %i\n", errno);
         close(server->sfd);
-        return NULL;
+        return;
     }
 
     // 'server' becomes unsafe since we are in a thread.
@@ -263,7 +263,7 @@ void* ServerBareMetal(void* serverStruct)
     int sfd = socket(serverInfo->domain, serverInfo->type, 0);
     if (sfd == -1) {
         SERVER_PRINT(RED, "[ERROR]: Failed Creating Socket. Error Code %i", errno);
-        Respond(creationInfo->clientAKAhost, response);
+        RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
 
@@ -271,7 +271,7 @@ void* ServerBareMetal(void* serverStruct)
     int bnd = bind(sfd, (struct sockaddr * )&addrInfo, sizeof(addrInfo));
     if (bnd == -1) {
         SERVER_PRINT(RED, "[ERROR]: Failed Binding Socket. Error Code %d", errno);
-        Respond(creationInfo->clientAKAhost, response);
+        RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
 
@@ -279,7 +279,7 @@ void* ServerBareMetal(void* serverStruct)
     int lsn = listen(sfd, serverInfo->maxClients);
     if (lsn == -1) {
         SERVER_PRINT(RED, "[ERROR]: Error while listening. Error Code %d", errno);
-        Respond(creationInfo->clientAKAhost, response);
+        RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
 
@@ -306,17 +306,17 @@ void* ServerBareMetal(void* serverStruct)
     response.rcode = k_rcRootOperationSuccessful;
     response.returnValue = NULL;
     response.rflag = k_rfRequestedDataUpdated;
-    Respond(serverInfo->host, response);
+    RespondToRootRequestMaker(serverInfo->host, response);
 
     pthread_t tid;
     pthread_create(&tid, NULL, ServerAcceptThread, (void*)serverInfo);
     pthread_join(tid, NULL);
-    return NULL;
+    return;
 
 server_close:
     close(sfd);
     pthread_exit(NULL);
-    return NULL;
+    return;
 }
 
 /** 
@@ -468,11 +468,11 @@ void EncryptClientMessage(CMessage* message)
 {
     // TODO: Use aes lib
 
-    int xorConstant = message->cflag;
+    const int kXorConstant = message->cflag;
 
     for (int charIndex=0; charIndex<strlen(message->message); charIndex++)
     {
-        message->message[charIndex] = message->message[charIndex] ^ xorConstant;
+        message->message[charIndex] = message->message[charIndex] ^ kXorConstant;
     }
 }
 
@@ -529,10 +529,10 @@ int RelayClientSentMessage(
         return -1;
 
     CMessage cmsg = {0};
-    cmsg.cflag = k_cfPrintEchodClientMessage;
+    cmsg.cflag = k_cfPrintPeerClientMessage;
     cmsg.sender = op;
     strcpy(cmsg.message, message);
-    ResponseCode requestStatus = MakeServerRequest(k_cfEchoClientMessageInServer, *op, cmsg, *server);
+    ResponseCode requestStatus = MakeServerRequest(k_cfEchoClientMessageInServer, *op, cmsg);
   
     if (requestStatus == k_rcRootOperationSuccessful)
         return 0;

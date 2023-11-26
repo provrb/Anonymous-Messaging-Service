@@ -1,5 +1,5 @@
 /**
- * ****************************(C) COPYRIGHT {2023} Blue Bear****************************
+ * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  * @file       cli.c
  * @brief      all things regarding command line interface for the user
  * 
@@ -13,7 +13,7 @@
  * 
  * ==============================================================================
  * @endverbatim
- * ****************************(C) COPYRIGHT {2023} Blue Bear****************************
+ * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  */
 
 #include "hdr/cli.h"
@@ -120,19 +120,19 @@ void DisplayServers() {
 void DisplayCommands() {
     int maxCommandLength = 0;
 
-    // Find the maximum length of commandName to align the command names
-    for (int i = 0; i < numOfCommands; i++) {
-        int commandLength = strlen(validCommands[i].commandName);
+    // Find the maximum length of kCommandName to align the command names
+    for (int i = 0; i < kNumOfCommands; i++) {
+        int commandLength = strlen(validCommands[i].kCommandName);
         if (commandLength > maxCommandLength) {
             maxCommandLength = commandLength;
         }
     }
 
-    SysPrint(UNDR WHT, true, "> Showing All (%d) Commands:", numOfCommands);
+    SysPrint(UNDR WHT, true, "> Showing All (%d) Commands:", kNumOfCommands);
 
     // Display commands with aligned colons
-    for (int i = 0; i < numOfCommands; i++) {
-        printf("\t%-*s : %s\n", maxCommandLength, validCommands[i].commandName, validCommands[i].cmdDesc);
+    for (int i = 0; i < kNumOfCommands; i++) {
+        printf("\t%-*s : %s\n", maxCommandLength, validCommands[i].kCommandName, validCommands[i].cmdDesc);
     }
 }
 
@@ -162,7 +162,7 @@ int Chatroom(Server* server) {
 
     // Create thread to print other client messages to the screen
     pthread_t tid;
-    if (pthread_create(&tid, NULL, ReceiveMessageFromServer, (void*)server) < 0) {
+    if (pthread_create(&tid, NULL, ReceivePeerMessagesOnServer, (void*)server) < 0) {
         printf("Internal server error. Aborting.\n");
         return -1;
     }
@@ -194,7 +194,7 @@ int Chatroom(Server* server) {
 
         if (strcmp(message, "--leave") == 0)
         {
-            ResponseCode leaveRequest = MakeServerRequest(k_cfKickClientFromServer, *localClient, (CMessage){0}, *server);
+            ResponseCode leaveRequest = MakeServerRequest(k_cfKickClientFromServer, *localClient, (CMessage){0});
             break;
         }
 
@@ -203,7 +203,7 @@ int Chatroom(Server* server) {
         cmsg.sender   = localClient;
         strcpy(cmsg.message, message);
         
-        ResponseCode requestStatus = MakeServerRequest(k_cfEchoClientMessageInServer, *localClient, cmsg, *server);
+        ResponseCode requestStatus = MakeServerRequest(k_cfEchoClientMessageInServer, *localClient, cmsg);
         
         printf("\x1b[1A");
         printf("\x1b[2K");

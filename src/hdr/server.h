@@ -16,8 +16,8 @@
  * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  */
 
-#ifndef __SERVER_H_
-#define __SERVER_H_
+#ifndef __SERVER_H__
+#define __SERVER_H__
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -40,6 +40,7 @@
 #include "min_max_values.h"
 
 // Debug mode. Allows for more printing
+/** Not used **/
 extern bool DEBUG;
 
 // Structure representing a server
@@ -122,9 +123,6 @@ typedef struct Response
  */
 void SERVER_PRINT(const char* color, const char* str, ...);
 
-// Allocate memory for the client so its usable. No segmentation faults
-void MallocClient();
-
 // Allocate memory for the array of clients in server struct
 // Only use on creation of server.
 void MallocServerClientList(Server* server);
@@ -183,4 +181,4 @@ void ShutdownServer(
 );
 
 
-#endif // __SERVER_H_
+#endif // __SERVER_H__

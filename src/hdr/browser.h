@@ -16,8 +16,8 @@
  * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  */
 
-#ifndef __BROWSER__
-#define __BROWSER__
+#ifndef __BROWSER_H__
+#define __BROWSER_H__
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -25,6 +25,7 @@
 #include "ccmds.h"
 #include "cli.h"
 #include "ccolors.h"
+
 
 extern unsigned int onlineServers; // Number of online servers
 extern Server       serverList[kMaxServersOnline]; // List of all online servers
@@ -50,4 +51,4 @@ int AddServerToList(Server server);
 */
 Server* UpdateServerList(); 
 
-#endif // __BROWSER__
+#endif // __BROWSER_H__
