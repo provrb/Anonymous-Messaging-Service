@@ -35,24 +35,6 @@
 */
 Server* ServerFromAlias(char* alias);
 
-/* 
-    Make a request to the root server.
-
-    The request is sent over a tcp socket by sending a 'RootRequest'
-    struct that includes everything about the request.
-    This function fills in the struct with the arguments provided.
-    
-    Once the root server receives the request, it will try and 
-    perform it. After it will return a struct called 'RootResponse'
-    that includes information about what happened on the root server.
-*/
-RootResponse MakeRootRequest(
-    CommandFlag    commandFlag,
-    Server    currentServer,
-    User      relatedClient, 
-    CMessage clientMessageInfo
-); 
-
 /*
     Exit the client application.
 

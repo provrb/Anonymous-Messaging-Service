@@ -25,7 +25,9 @@ bool DEBUG = false; // Debug mode
 #include "hdr/ccmds.h"
 #include "hdr/tools.h"
 
-void SERVER_PRINT(const char* color, const char* str, ...) {
+PortDesc portList[] = {};
+
+void ServerPrint(const char* color, const char* str, ...) {
     struct tm* timestr = gmt();
 
     va_list argp;
@@ -37,92 +39,6 @@ void SERVER_PRINT(const char* color, const char* str, ...) {
     vfprintf(stdout, str, argp);
     va_end(argp);    
     printf(RESET "\n");
-}
-
-void* ServerRecvThread(void* serverInfo)
-{
-    Server* server = (Server*)serverInfo;
-    while (1)
-    {
-        // Receive a message from a client
-        CMessage message = {0};
-        
-        int receivedBytes = recv(localClient->cfd, (void*)&message, sizeof(message), 0);
-        if (receivedBytes <= 0)
-            break; // TODO: handle situation
-        
-        if (message.cflag == k_cfEchoClientMessageInServer)
-        {
-
-            // Relay that message to all other clients so they can see what the client said
-            for (int ci = 0; ci < server->connectedClients; ci++)
-            {
-                CMessage relayThisMessage = {0};
-                relayThisMessage.cflag    = k_cfPrintPeerClientMessage;
-                relayThisMessage.sender   = message.sender;
-
-
-                // TODO: ENCRYPTED THE MESSAGE
-                // KEY SHOULD BE THE TIME THE USER JOINED THE ROOT SERVER IN MS + 12
-
-
-                strcpy(relayThisMessage.message, message.message);
-
-                int sentBytes = send(server->clientList[ci]->cfd, (void*)&relayThisMessage, sizeof(CMessage), 0);
-                if (sentBytes <= 0)
-                    continue;
-            }
-        }
-
-    }
-}
-
-void RecvMessages(void* serverInfo)
-{
-    Server* server = (Server*)serverInfo;
-
-    while (1)
-    {   
-        for (int c = 0; c < server->connectedClients; c++)
-        {
-            CMessage message = {0};
-            int receivedBytes = recv(server->clientList[c]->cfd, (void*)&message, sizeof(message), MSG_DONTWAIT);
-            
-            printf("Received message from %s.\n", message.sender->handle);
-
-            // Send that message to all clients
-            if (message.cflag == k_cfEchoClientMessageInServer && receivedBytes > 0)
-            {
-                // FIXME: Make it a thread so it can relay multiple messages at a time
-                // TODO: ENCRYPT MESSAGES
-                // Relay received message to all clients
-                for (int ci = 0; ci < server->connectedClients; ci++) {
-                    User* connectedClient = server->clientList[ci];
-
-                    // Dont send the message back to the person who actually SENT the message in the first place
-                    if (strcmp(connectedClient->handle, message.sender->handle) == 0)
-                        continue;
-
-                    // VITAL: Tell the client we want them to recv and print it out
-                    message.cflag = k_cfPrintPeerClientMessage;
-
-                    int sentBytes = sendto(connectedClient->cfd, (void*)&message, sizeof(message), 0, (struct sockaddr*)&connectedClient->caddr, sizeof(connectedClient->caddr));
-                    // TODO: handle sendto error situations            
-                }
-            }
-        }
-        
-    }
-
-}
-
-void RelayMessagesOnServer(void* serverInfo)
-{
-    // Receive cmessages and then send them to all clients
-    Server* server = (Server*)serverInfo;
-    pthread_t pid;
-    pthread_create(&pid, NULL, RecvMessages, (void*)server);
-    pthread_join(pid, NULL);
 }
 
 void* ListenForRequestsOnServer(void* server)
@@ -145,7 +61,7 @@ void* ListenForRequestsOnServer(void* server)
 
         printf(CYN "[%s] Received Server Request: %i\n" RESET, serverToListenOn->alias, request.command);
 
-        DoServerRequest((void*)&request);
+        DoServerRequest(request);
         
         // Don't listen for requests from that client anymore
         if (request.command == k_cfKickClientFromServer)
@@ -220,11 +136,6 @@ void* ServerAcceptThread(void* serverInfo)
     pthread_exit(NULL);
 }
 
-void MallocServerClientList(Server* server)
-{
-    server->clientList = (User**)malloc(sizeof(User*) * server->maxClients);
-}
-
 /**
  * @brief           Construct a server using arguments found in the Thread_ServerArgs struct
  * @param[in]       serverArgsStruct: Thread_AcceptArgs struct with parameters
@@ -262,7 +173,7 @@ void* ServerBareMetal(void* serverStruct)
     // Create server socket
     int sfd = socket(serverInfo->domain, serverInfo->type, 0);
     if (sfd == -1) {
-        SERVER_PRINT(RED, "[ERROR]: Failed Creating Socket. Error Code %i", errno);
+        ServerPrint(RED, "[ERROR]: Failed Creating Socket. Error Code %i", errno);
         RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
@@ -270,7 +181,7 @@ void* ServerBareMetal(void* serverStruct)
     // Bind socket to the address info provided
     int bnd = bind(sfd, (struct sockaddr * )&addrInfo, sizeof(addrInfo));
     if (bnd == -1) {
-        SERVER_PRINT(RED, "[ERROR]: Failed Binding Socket. Error Code %d", errno);
+        ServerPrint(RED, "[ERROR]: Failed Binding Socket. Error Code %d", errno);
         RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
@@ -278,7 +189,7 @@ void* ServerBareMetal(void* serverStruct)
     // Listen for client connections
     int lsn = listen(sfd, serverInfo->maxClients);
     if (lsn == -1) {
-        SERVER_PRINT(RED, "[ERROR]: Error while listening. Error Code %d", errno);
+        ServerPrint(RED, "[ERROR]: Error while listening. Error Code %d", errno);
         RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
@@ -296,7 +207,7 @@ void* ServerBareMetal(void* serverStruct)
     serverInfo->sfd        = sfd;
     serverInfo->addr       = addrInfo;
     serverInfo->online     = true; // True. Server online and ready
-    MallocServerClientList(serverInfo);
+    serverInfo->clientList = (User**)malloc(sizeof(User*) * serverInfo->maxClients); // Allocate memory for the servers client list
     strcpy(serverInfo->alias, creationInfo->serverInfo->alias);
     
     // add server to server list
@@ -358,28 +269,30 @@ int MakeServer(
 
     // Iterate through servers, Check if the alias, and port is already in use
     // TODO: Optimize. Might be extremely slow when theres a lot of servers
-    for (int i = 0; i < onlineServers; i++){
+    // O(n). Slow
+    
+    // for (int i = 0; i < onlineServers; i++){
         
-        // Check if port is in use
-        if (port == serverList[i].port)
-        {
-            SysPrint(YEL, true, "[WARNING]: Port Already In Use. Choose a Different Port. (%i)", port);
-            return -1;
-        }
+    //     // Check if port is in use
+    //     if (port == serverList[i].port)
+    //     {
+    //         SysPrint(YEL, true, "[WARNING]: Port Already In Use. Choose a Different Port. (%i)", port);
+    //         return -1;
+    //     }
         
-        // Check if alias is in use
-        char currentServerName[kMaxServerAliasLength + 1];
-        strcpy(currentServerName, serverList[i].alias);
-        if (currentServerName != NULL){
-            toLowerCase(alias); 
-            toLowerCase(currentServerName);
+    //     // Check if alias is in use
+    //     char currentServerName[kMaxServerAliasLength + 1];
+    //     strcpy(currentServerName, serverList[i].alias);
+    //     if (currentServerName != NULL){
+    //         toLowerCase(alias); 
+    //         toLowerCase(currentServerName);
 
-            if (strcmp(currentServerName, alias) == 0) { // Server name is already used
-                SysPrint(YEL, true, "[WARNING]: Cannot Create Server: Name Already In Use. (%s)", alias);
-                return -1;
-            }
-        }
-    }
+    //         if (strcmp(currentServerName, alias) == 0) { // Server name is already used
+    //             SysPrint(YEL, true, "[WARNING]: Cannot Create Server: Name Already In Use. (%s)", alias);
+    //             return -1;
+    //         }
+    //     }
+    // }
     
     Server serv;
     memset(&serv, 0, sizeof(Server));
@@ -397,6 +310,9 @@ int MakeServer(
     RootResponse response = MakeRootRequest(k_cfMakeNewServer, serv, *localClient, (CMessage){0});
     if (response.rcode == k_rcRootOperationSuccessful)
         SysPrint(CYN, false, "Server '%s' Created on Port '%i'\n", serv.alias, serv.port);
+    else if (response.rcode == k_rcInternalServerError && response.returnValue == (void*)serv.port)
+        // Port in use error
+        SysPrint(YEL, false, "[WARNING]: Port Already In Use. Choose a Different Port. (%i)\n", serv.port);
     else
         SysPrint(RED, false, "Error Making Server '%s'\n", serv.alias);
 
@@ -408,13 +324,16 @@ bool IsUserHost(User user, Server* server)
     return (strcmp(user.handle, server->host->handle) == 0);
 }
 
-void ShutdownServer(char* alias)
+void ShutdownServer(Server* server)
 {
-    printf("Server shutdown requested for '%s'...\n", alias);
+    printf("Server shutdown requested for '%s'...\n", server->alias);
     
-    Server* server = ServerFromAlias(alias);
     server->online = false;
-    
+
+    // Unuse port
+    int portIndex = server->port % kMaxServersOnline;
+    portList[portIndex].inUse = false;
+
     printf("Disconnecting all clients from server... ");
     for (int cl_index=0; cl_index<server->connectedClients; cl_index++)
     {
@@ -428,7 +347,7 @@ void ShutdownServer(char* alias)
 
     // Get index where the server is located on serverList
     for (int i=0; i < onlineServers; i++){
-        if (strcmp(serverList[i].alias, alias) == 0){
+        if (strcmp(serverList[i].alias, server->alias) == 0){
             serverIndex = i;
             break;
         }        
@@ -450,20 +369,6 @@ void ShutdownServer(char* alias)
     printf("Server closed successfully... Done\n");
 }
 
-// Send a message to all clients connected to the server
-int SendServerMessage(Server* server, char* message)
-{
-    for (int cl_index = 0; cl_index < server->connectedClients; cl_index++)
-    {
-        if (write(server->clientList[cl_index]->cfd, message,
-                 sizeof(message)) == -1)
-        {
-            SysPrint(RED, true, "Error sending server message. Errno %i", errno);
-        }
-
-    }
-}
-
 void EncryptClientMessage(CMessage* message)
 {
     // TODO: Use aes lib
@@ -476,14 +381,13 @@ void EncryptClientMessage(CMessage* message)
     }
 }
 
-ResponseCode DoServerRequest(void* request)
+ResponseCode DoServerRequest(ServerRequest request)
 {
-    ServerRequest* serverRequest = (ServerRequest*)request;
-    User sender = serverRequest->requestMaker;
+    User sender = request.requestMaker;
     
     ResponseCode responseStatus = k_rcInternalServerError;
 
-    switch (serverRequest->command)
+    switch (request.command)
     {
     case k_cfKickClientFromServer:
         DisconnectClientFromServer(&sender);
@@ -491,7 +395,7 @@ ResponseCode DoServerRequest(void* request)
     case k_cfEchoClientMessageInServer:
         Server* connectedServer = sender.connectedServer;
 
-        EncryptClientMessage(&serverRequest->optionalClientMessage);
+        EncryptClientMessage(&request.optionalClientMessage);
 
         // relay encrypted message to all connected clients
         for (int ci = 0; ci < connectedServer->connectedClients; ci++)
@@ -500,8 +404,8 @@ ResponseCode DoServerRequest(void* request)
                 continue; // Dont send the message to the client who sent the message
 
             int sentBytes = send(connectedServer->clientList[ci]->cfd,
-                                 (void*)&serverRequest->optionalClientMessage, 
-                                 sizeof(serverRequest->optionalClientMessage), 0);    
+                                 (void*)&request.optionalClientMessage, 
+                                 sizeof(request.optionalClientMessage), 0);    
         }
 
         responseStatus = k_rcRootOperationSuccessful;
@@ -517,26 +421,3 @@ ResponseCode DoServerRequest(void* request)
 
     return responseStatus;
 }
-
-int RelayClientSentMessage(
-    Server* server,
-    char* message, 
-    User* op // Original Poster/Sender
-)
-{
-    // No clients to relay msg to
-    if (server->connectedClients <= 0)
-        return -1;
-
-    CMessage cmsg = {0};
-    cmsg.cflag = k_cfPrintPeerClientMessage;
-    cmsg.sender = op;
-    strcpy(cmsg.message, message);
-    ResponseCode requestStatus = MakeServerRequest(k_cfEchoClientMessageInServer, *op, cmsg);
-  
-    if (requestStatus == k_rcRootOperationSuccessful)
-        return 0;
-
-    return -1;
-}
-

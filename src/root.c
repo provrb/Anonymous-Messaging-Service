@@ -81,7 +81,87 @@ void UpdateClientInConnectedServer(User* userToUpdate)
     UpdateServerWithNewInfo(server);
 }
 
-pthread_t tidd;
+/**
+ * @brief           Make a request from the client to the root server. Kind of like http
+ * @param[in]       commandFlag:   tell the server what to do with the data
+ * @param[in]       currentServer: server to make the request from
+ * @param[in]       relatedClient: client who made the request
+ * @return          void*
+ * @retval          RootResponse from server as void*
+ */
+RootResponse MakeRootRequest(
+    CommandFlag    commandFlag,
+    Server    currentServer,
+    User      relatedClient,
+    CMessage clientMessageInfo
+)
+{
+    RootRequest request;
+    request.cmdFlag           = commandFlag;
+    request.server            = currentServer;
+    request.user              = relatedClient;
+    request.clientSentMessage = clientMessageInfo;
+
+    // Default response values
+    RootResponse response = {0};
+    response.rcode        = k_rcInternalServerError;
+    response.rflag        = k_rfNoResponse;
+    response.returnValue  = NULL;
+
+    // Send request to root server
+    int sentBytes = send(rootServer.sfd, (const void*)&request, sizeof(RootRequest), 0);
+    if (sentBytes <= 0) { // Client disconnected or something went wrong sending
+        printf(RED "Error making request to root server...\n" RESET);
+        return response;
+    }
+
+    // Client wont be able to receive messages when their socket file descriptor is closed
+    if (request.cmdFlag == k_cfDisconnectClientFromRoot)
+        return response;
+
+    // Receive a response from the root server
+    int receivedBytes = recv(rootServer.sfd, (void*)&response, sizeof(RootResponse), 0);
+    if (receivedBytes < 0) { // Client disconnected or something went wrong receiving
+        printf(RED "Failed to receive data from root server...\n" RESET);
+        return response;
+    }
+ 
+    // In the case of special commands
+    // where we may need to send or recv more than once
+    switch (request.cmdFlag)
+    {
+    case k_cfRequestServerList: // Need to receive all servers individually
+    {
+        // Receive the number of online servers
+        uint32_t onlineServersTemp = 0;
+        int initialReceivedBytes = recv(rootServer.sfd, &onlineServersTemp, sizeof(onlineServersTemp), 0);
+        
+        if (initialReceivedBytes <= 0)
+            break;
+        
+        onlineServers = ntohl(onlineServersTemp);
+
+        // Receive all servers
+        for (int i = 0; i < onlineServers; i++){
+            Server receivedServer = {0};
+            int receive = recv(rootServer.sfd, (void*)&receivedServer, sizeof(Server), 0);
+            
+            if (receive <= 0)
+                break;
+            
+            // Update server list
+            serverList[i] = receivedServer;
+        }
+
+        break;
+    }
+    default:
+        break;
+    }
+
+    return response;
+}
+
 ResponseCode DoRootRequest(void* req)
 {
     RootRequest  request = *(RootRequest*)req;
@@ -140,16 +220,43 @@ ResponseCode DoRootRequest(void* req)
         RespondToRootRequestMaker(&request.user, response);
         break;
     case k_cfMakeNewServer: // Make new server and run it
+        // Make sure port isnt in use
+
+        // Try and find the port in the hash map
+        
+        // Index will be the port hashed by max servers allowed online
+        int indexInList = request.server.port % kMaxServersOnline;
+
+        // Check if ports in use
+        if (portList[indexInList].port == request.server.port)
+        {
+            // in use
+            response.rcode = k_rcInternalServerError;
+            response.returnValue = (void*)request.server.port;
+            response.rflag = k_rfSentDataWasUnused;
+            RespondToRootRequestMaker(&request.user, response);
+            break;
+        }
+
+        // Add it to the list of ports
+
+        // hash it
+        int hashWhichIsAlsoTheListIndex = request.server.port % kMaxServersOnline;
+        
+        // Add port to list
+        PortDesc portInfo = {0};
+        portInfo.inUse = true;
+        portInfo.port = request.server.port;
+        portList[hashWhichIsAlsoTheListIndex] = portInfo;
+
         ServerCreationInfo creationInfo = {0};
         creationInfo.serverInfo = &request.server;
         creationInfo.clientAKAhost = &request.user;
 
-        // ServerBareMetal((void*)&creationInfo);
-
         if (pthread_create(&pid, NULL, ServerBareMetal, (void*)&creationInfo) != 0)
             SysPrint(RED, true, "***** FATAL ERROR: Failed to Make Thread for Server. Errno %i. Aborting.", errno);
-        // pthread_join(pid, NULL);
-        break;    // close(sfd);
+
+        break;
     // pthread_exit(NULL);
     case k_cfDisconnectClientFromRoot:
         DisconnectClientFromRootServer(&request.user);
@@ -160,15 +267,6 @@ ResponseCode DoRootRequest(void* req)
         break;
     case k_cfUpdateServerWithNewINfo:
         UpdateServerWithNewInfo(&request.server);
-        break;
-    case k_cfAddClientToServer:
-        request.server.connectedClients++; // increment num of connected clients
-        request.server.clientList[request.server.connectedClients] = &request.user; // add client to client list
-        UpdateServerWithNewInfo(&request.server); // Update server in serverList with new info
-
-        response.returnValue = (void*)&request.server;
-        response.rflag = k_rfValueReturnedFromRequest;
-        RespondToRootRequestMaker(&request.user, response);
         break;
     default:
         return k_rcInternalServerError; // LIkely the command doesnt exist
@@ -287,7 +385,7 @@ void* PerformRootRequestFromClient(void* client) {
 
 void RespondToRootRequestMaker(User* to, RootResponse response) {
     fprintf(stderr, CYN "[AMS] Response to Client '%s' ", to->handle);
-    int snd = sendto(to->rfd, (void*)&response, sizeof(response), MSG_NOSIGNAL, (struct sockaddr*)&to->caddr, sizeof(to->caddr));
+    int snd = sendto(to->rfd, (void*)&response, sizeof(response), MSG_NOSIGNAL, (struct sockaddr*)&to->addressInfo, sizeof(to->addressInfo));
     
     if (snd <= 0)
         printf(RED "Failed\n" RESET);
@@ -325,7 +423,7 @@ void DisconnectClientFromRootServer(User* usr) {
             usr->connectedServer->clientList[i] = usr->connectedServer->clientList[i + 1]; 
 
         if (IsUserHost(*usr, usr->connectedServer))
-            ShutdownServer(usr->connectedServer->alias);
+            ShutdownServer(usr->connectedServer);
     }
 
     // Remove 1 client from connected client count
@@ -421,6 +519,6 @@ void DisconnectClientFromServer(User* user) {
 
     if (IsUserHost(*user, server))
     {
-        ShutdownServer(server->alias);
+        ShutdownServer(server);
     }
 }

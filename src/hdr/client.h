@@ -32,21 +32,6 @@
 extern User*  localClient; // Client struct
 
 /*
-    A structure representing a request
-    from a client to a server.
-
-    Contains information such as what command to perform,
-    and an optional 'CMessage' struct if the user wants
-    to relay the message to peer clients on the server.
-*/
-typedef struct ClientToServerRequest
-{
-    CommandFlag command; // Command to tell the server to perform
-    User        requestMaker; // User who is making the request
-    CMessage    optionalClientMessage; // (CMessage){0} if no message
-} ServerRequest;
-
-/*
     Allocate memory for the 'localClient'
 
     Without this a segmentation fault is bound

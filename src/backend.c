@@ -43,87 +43,6 @@ Server* ServerFromAlias(char* alias) {
 }
 
 /**
- * @brief           Make a request from the client to the root server. Kind of like http
- * @param[in]       commandFlag:   tell the server what to do with the data
- * @param[in]       currentServer: server to make the request from
- * @param[in]       relatedClient: client who made the request
- * @return          void*
- * @retval          RootResponse from server as void*
- */
-RootResponse MakeRootRequest(
-    CommandFlag    commandFlag,
-    Server    currentServer,
-    User      relatedClient,
-    CMessage clientMessageInfo
-)
-{
-    RootRequest request;
-    request.cmdFlag           = commandFlag;
-    request.server            = currentServer;
-    request.user              = relatedClient;
-    request.clientSentMessage = clientMessageInfo;
-
-    // Default response values
-    RootResponse response = {0};
-    response.rcode        = k_rcInternalServerError;
-    response.rflag        = k_rfNoResponse;
-    response.returnValue  = NULL;
-
-    // Send request to root server
-    int sentBytes = send(rootServer.sfd, (const void*)&request, sizeof(RootRequest), 0);
-    if (sentBytes <= 0) { // Client disconnected or something went wrong sending
-        printf(RED "Error making request to root server...\n" RESET);
-        return response;
-    }
-
-    // Client wont be able to receive messages when their socket file descriptor is closed
-    if (request.cmdFlag == k_cfDisconnectClientFromRoot)
-        return response;
-
-    // Receive a response from the root server
-    int receivedBytes = recv(rootServer.sfd, (void*)&response, sizeof(RootResponse), 0);
-    if (receivedBytes < 0) { // Client disconnected or something went wrong receiving
-        printf(RED "Failed to receive data from root server...\n" RESET);
-        return response;
-    }
- 
-    // In the case of special commands
-    // where we may need to send or recv more than once
-    switch (request.cmdFlag)
-    {
-    case k_cfRequestServerList: // Need to receive all servers individually
-    {
-        // Receive the number of online servers
-        uint32_t onlineServersTemp = 0;
-        int initialReceivedBytes = recv(rootServer.sfd, &onlineServersTemp, sizeof(onlineServersTemp), 0);
-        
-        if (initialReceivedBytes <= 0)
-            break;
-        
-        onlineServers = ntohl(onlineServersTemp);
-
-        // Receive all servers
-        for (int i = 0; i < onlineServers; i++){
-            Server receivedServer = {0};
-            int receive = recv(rootServer.sfd, (void*)&receivedServer, sizeof(Server), 0);
-            
-            if (receive <= 0)
-                break;
-            
-            // Update server list
-            serverList[i] = receivedServer;
-        }
-
-        break;
-    }
-    default:
-        break;
-    }
-
-    return response;
-}
-
-/**
  *    --------[ SETTINGS FUNCTIONS ]--------
  * Functions to control the settings
  * for the user. 
@@ -162,7 +81,7 @@ void* JoinServer(Server* server) {
         return;
     }
 
-    localClient->caddr = server->addr;
+    localClient->addressInfo = server->addr;
     localClient->cfd = cfd;
     localClient->connectedServer = server;
 

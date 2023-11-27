@@ -34,7 +34,7 @@ ResponseCode MakeServerRequest(
     int sentBytes = send(requestMaker.cfd, (void*)&request, sizeof(request), 0);
     if (sentBytes < 0) // Error sending message
     {
-        SERVER_PRINT(RED, "Error Making Server Request");
+        ServerPrint(RED, "Error Making Server Request");
         return response;
     }
 
@@ -69,7 +69,6 @@ void DisconnectClient(){
     // Remove client from root connected clients
 
     SysPrint(WHT, true, "Disconnecting %s", localClient->handle);
-    localClient->removeMe = true;
     RootResponse response = MakeRootRequest(k_cfDisconnectClientFromRoot, rootServer, *localClient, (CMessage){0});
     if (response.rcode = k_rcRootOperationSuccessful){
         SysPrint(GRN, false, "Disconnected. Goodbye");
@@ -117,7 +116,7 @@ void ReceivePeerMessagesOnServer(void* serverInfo)
             break;
         else if (receivedBytes == 0 && server->online == false) // Server was shutdown
         {
-            SERVER_PRINT(YEL, "Server Was Shutdown. Quitting.");
+            ServerPrint(YEL, "Server Was Shutdown. Quitting.");
             LeaveConnectedServer();
             break;
         }
@@ -143,13 +142,13 @@ void ReceivePeerMessagesOnServer(void* serverInfo)
             */
             
             LeaveConnectedServer();
-            SERVER_PRINT(RED, "You have been kicked from '%s'\n", server->alias);
+            ServerPrint(RED, "You have been kicked from '%s'\n", server->alias);
             return;
         case k_cfBanClientFromServer:
             // TODO: Add an array of banned clients to Server struct and add this user to it.
             
             LeaveConnectedServer();
-            SERVER_PRINT(RED, "You Have Been Banned From '%s'\n", server->alias);
+            ServerPrint(RED, "You Have Been Banned From '%s'\n", server->alias);
             return;
         default:
             break;
@@ -212,7 +211,6 @@ void* HandleClientInput(){
                 continue;
             }
 
-            printf("sounds good: %s\n", localClient->handle);
             JoinServerByName(serverName);
             validCmd = true;
         }
@@ -313,9 +311,8 @@ void AssignDefaultHandle(char defaultName[]) {
 }
 
 int DefaultClientConnectionInfo() {
-    localClient->removeMe = false;
     localClient->joined = gmt();
-    localClient->caddr = rootServer.addr;
+    localClient->addressInfo = rootServer.addr;
     localClient->connectedServer = (Server*){0};
     localClient->cfd = 0;
     localClient->rfd = rootServer.sfd;
@@ -402,11 +399,7 @@ int ConnectToRootServer() {
 
     printf("Sent current user info. Now trying to recv.\n");
 
-    // Save user handle as it turns to garbage memory when new info is received.
-    char tempHandle[kMaxClientHandleLength];
-    strcpy(tempHandle, localClient->handle);
-
-    // Get response to update user info
+    // Get response
     RootResponse resp = {0};
     int recvInfo = recv(rootServer.sfd, (void*)&resp, sizeof(resp), 0);
 
@@ -414,13 +407,7 @@ int ConnectToRootServer() {
 
     if (resp.rcode == k_rcRootOperationSuccessful && resp.rflag == k_rfRequestedDataUpdated)
     {
-        // Update the client with info from the root server
-        User* updatedClient = (User*)&resp.returnValue;
-        localClient = updatedClient;
-
-        // Get rid of junk username that was applied when we updated the user
-        // Make it the original username that was selected
-        strcpy(localClient->handle, tempHandle);
+        localClient->rfd = rootServer.sfd;
 
         // Success
         return 0;

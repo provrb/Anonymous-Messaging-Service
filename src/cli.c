@@ -157,8 +157,8 @@ int Chatroom(Server* server) {
 
     // Clear previous terminal output
     ClearOutput();
-    SERVER_PRINT(CYN, "You are now connected to '%s'", server->alias);
-    SERVER_PRINT(CYN, "Use '--leave' to Disconnect.\n");
+    ServerPrint(CYN, "You are now connected to '%s'", server->alias);
+    ServerPrint(CYN, "Use '--leave' to Disconnect.\n");
 
     // Create thread to print other client messages to the screen
     pthread_t tid;
@@ -220,6 +220,7 @@ int Chatroom(Server* server) {
     ClearOutput();
     SysPrint(CYN, false, "Disconnected From the Server '%s'", server->alias);
     SplashScreen();
+    EnableTerminalInput();
     return 0;
 }
 

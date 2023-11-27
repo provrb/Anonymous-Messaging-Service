@@ -43,110 +43,135 @@
 /** Not used **/
 extern bool DEBUG;
 
-// Structure representing a server
-struct ServerStr; // To put it in UserStr before ServerStr is defined
+/*
+    Struct describing a port
+    to see if it is in use.
+*/
+typedef struct PortDescription
+{
+    int  port;
+    bool inUse;
+} PortDesc;
 
-// Structure representing a client connected
-struct UserStr;   // So UserStr can be compiled if it it used before defined
+/*
+    A list of all ports that have been
+    used previously for some reason. Used
+    to speed up the process of checking if a port
+    is in use when making a server. (Server-sided. O(1) time-complexity)
+*/
+extern PortDesc portList[];
 
-// Information about a user
+/*
+    A struct which represents a client and holds information
+    about the client such as their selected username,
+    file descriptors, and client address info.
+*/
 typedef struct UserStr
 {
-    char              handle[kMaxClientHandleLength + 1]; // Username
-    struct tm*        joined; // Time joined chatroom | GMT Time
-    unsigned int      cfd;    // User File Descriptor (Socket)
-    struct sockaddr_in caddr;  // Client address info
-    struct ServerStr* connectedServer;
-    bool              removeMe; // If set to true tell the server to disconnect client from root server
-    int               rfd;    // root file descriptor. Socket of the client connected to root server
+    char               handle[kMaxClientHandleLength + 1]; // The clients username
+    struct tm*         joined;                             // Time joined chatroom | GMT Time
+    unsigned int       cfd;                                // User File Descriptor (Socket)
+    struct sockaddr_in addressInfo;                        // Client address info
+    struct ServerStr*  connectedServer;                    // The server the client is connected to
+    int                rfd;                                // root file descriptor. Socket of the client connected to root server
 } User;
 
-// Information about a server
+/*
+    A struct representing a server that
+    clients can connect to and send requests on.
+    Servers have a socket file descriptor which is used
+    to send and receive information over sockets.
+*/
 typedef struct ServerStr 
 {
-    int                sfd; // Socket File Descriptor
-    int                domain;
-    int                type;
-    int                protocol;
-    int                port;
-    unsigned int       connectedClients; // Current # of connected clients to the server
-    unsigned int       maxClients; // Max clients allowed to connect
-    struct sockaddr_in addr; // address struct with info on the server address
-    bool               online; // boolean
+    int                sfd;                              // Socket File Descriptor
+    int                domain;                           // Communcation domain the server is operating on
+    int                type;                             // Communcation semmantic type. All servers are SOCK_STREAM
+    int                protocol;                         // Server protocol. All server protocols will be 0.
+    int                port;                             // The port the server is operating on. Port must be open for it to be created.
+    unsigned int       connectedClients;                 // Current # of connected clients to the server
+    unsigned int       maxClients;                       // Max clients allowed to connect
+    struct sockaddr_in addr;                             // address struct with info on the server address
+    bool               online;                           // Bool representing whether or not the server is online
     char               alias[kMaxServerAliasLength + 1]; // used to connect to server without ip
-    bool               isRoot; // if the connected server is the root server
-    User*              host; // Client who requested for server to be created
-
-    User** clientList; // list of clients. NEEDS TO BE MALLOCED FIRST
+    bool               isRoot;                           // if the connected server is the root server
+    User*              host;                             // Client who requested for server to be created
+    User**             clientList;                       // List of connected clients. Memory must be allocated first
 } Server;
 
-// Info to create a server with
-// Includes the client info of the host
+/*
+    Info used to create a server in
+    ServerBareMetal thread. Includes the
+    info to create a server and the host
+    who wants to make the server.
+*/
 typedef struct ServerCreationInformation
 {
     User*   clientAKAhost; // Host of the server. The person who requested to create the server
-    Server* serverInfo; // Info of the server to be used when creating
+    Server* serverInfo;    // Info of the server to be used when creating
 } ServerCreationInfo;
 
-// Information about a client sent message
+/*
+    A struct representing a message sent from
+    a client to a server. Contains a command flag
+    to tell the server what to do with this message. 
+*/
 typedef struct ClientMessage
 {
-    CommandFlag cflag; // what to do with the message
-    User*       sender; // Client who sent the message
-    char        message[kMaxClientMessageLength + 1];
+    CommandFlag cflag;                                // What to do with the message
+    User*       sender;                               // Client who sent the message
+    char        message[kMaxClientMessageLength + 1]; // String message
 } CMessage;
 
-// A struct with information to send the root server
-// to perform a request
-typedef struct RootServerRequest
+/*
+    A structure representing a request
+    from a client to a server.
+
+    Contains information such as what command to perform,
+    and an optional 'CMessage' struct if the user wants
+    to relay the message to peer clients on the server.
+*/
+typedef struct ClientToServerRequest
 {
-    CommandFlag cmdFlag; // What command to tell root server to perform
-    User        user;
-    Server      server;
-    CMessage    clientSentMessage; // A message sent by client. empty string if no message. ENCRYPTED
-} RootRequest;
+    CommandFlag command; // Command to tell the server to perform
+    User        requestMaker; // User who is making the request
+    CMessage    optionalClientMessage; // (CMessage){0} if no message
+} ServerRequest;
 
-// Struct describing the result of making a root request
-// Gives information on the operation- did it succeed.
-typedef struct Response
-{
-    ResponseFlag rflag; // Response flags, tell the client what to do or what has been done
-    ResponseCode rcode; // Response code/status code. Tell if the operation succeeded
-    void*  returnValue; // Expect returned thing from making the root request like a server list
-} RootResponse;
-
-/**
- * @brief           Print out a message with time and server prefix
- * @param[in]       color: What to color terminal text
- * @param[in]       str: String to print
- * @param[in]       ...: Formatting
- */
-void SERVER_PRINT(const char* color, const char* str, ...);
-
-// Allocate memory for the array of clients in server struct
-// Only use on creation of server.
-void MallocServerClientList(Server* server);
-
-// Send a message sent to the server to all clients connected to that server
-int RelayClientSentMessage(
-    Server* server,
-    char* message, 
-    User* op // Original Poster/Sender
+/*
+    Print out a message with the time and a [srv/] tag.
+    
+    Choose the color to print out as in the terminal
+    Time printed out is in UTC.
+    New line automatically added at the end of strings.
+*/
+void ServerPrint(
+    const char* color,
+    const char* str, 
+    ... // variable args like printf("%s", --> myName <--);
 );
 
-int SendServerMessage(
-    Server* server,
-    char* message
-);
-
-// Construct a server
-// Use MakeServer() Rather than ServerBareMetal().
+/*
+    Bare bones of creating a server.
+    'Server' struct must be casted to void*
+    and passed as the 'serverStruct' parameter.
+    
+    All fields in the struct must be completed.
+    Recommended to use MakeServer() instead.
+*/
 void* ServerBareMetal(
     void* serverStruct // Server Struct
 );
 
-// Wrapper for ServerBareMetal
-// Creates a thread for ServerBareMetal
+/*
+    Recommended way of creating a server.
+
+    Called when the client makes a root request
+    with the command flag 'k_cfMakeNewServer'
+    Create a server server-sided with 
+    arguments from the client who made the request
+    to make a server.
+*/
 int MakeServer(
     int domain, // AF_INET
     int type, // SOCK_STREAM
@@ -156,28 +181,62 @@ int MakeServer(
     char* alias
 );
 
-// Doesn't return anything because
-// the CMessage.message string will be encrypted
-void EncryptClientMessage(CMessage* message);
+/*
+    Xor and encrypt a message in a CMessage struct.
 
-ResponseCode DoServerRequest(
-    void* request
+    After calling this function, message.message should
+    be encrypted and no return value is needed.
+*/
+void EncryptClientMessage(
+    CMessage* message
 );
 
-// Check if 'user' is host of 'server'
+/*
+    Listen for any request made on
+    'server' by the LATEST CONNECTED CLIENT.
+
+    A new thread for this function is created
+    for every client accepted to 'server'. This
+    function listens for any requests made to the server
+    by the client accepted and calls DoServerRequest()
+    once a request is received.
+*/
+void* ListenForRequestsOnServer(
+    void* server
+);
+
+/*
+    Respond to a client who made a request
+    to their current connected server.
+
+    Can only perform requests from a client
+    after ListenForRequestsOnServer() is called for that client
+*/
+ResponseCode DoServerRequest(
+    ServerRequest request
+);
+
+/*
+    Return 'true' if 'user' is the host of 'server'
+
+    Checks the 'host' field of 'server' and compares
+    the name of the host with 'user'. If they are the
+    same than 'user' is the host and return true, otherwise
+    return false.
+*/
 bool IsUserHost(
     User user,
     Server* server
 );
 
-// Receive messages from clients on server
-void* ServerRecvThread(
-    void* serverInfo
-);
+/*
+    Close a server and close all connected client sockets.
 
-// Close a server and close all the client sockets connected to it
+    Safely shutdown a server by closing the servers file descriptor
+    as well as any client file descriptors for that server.
+*/
 void ShutdownServer(
-    char* alias
+    Server* server
 );
 
 
