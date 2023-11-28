@@ -35,3 +35,11 @@ Decrypted once a peer client receives the message. Simple encryption method.
 - Bug fixes
 - Optimization
 - Make requests to a server
+
+# v1.1.5
+- Major optimization
+- Major code cleanup
+- Bug fixes
+  - Fixed segmentation fault on root server when client would disconnect
+- Removed unneccessary functions
+- Documentation in all header files now
