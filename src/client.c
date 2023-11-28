@@ -46,10 +46,25 @@ void* JoinServer(Server* server) {
     int sentBytes = send(cfd, (void*)&dereferenceClient, sizeof(dereferenceClient), 0);
     
     // TODO: HANDLE SITUATIONS THAT SEND BREAKS
-
+    if (sentBytes <= 0) // Error. Stop chatroom joining process.
+    {
+        SysPrint(RED, false, "Error Trying to Join Server '%s', server->alias);
+        close(cfd);
+        
+        return;
+    }
+        
     // Receive most updated server info
     Server updatedServer = {0};
     int recvBytes = recv(cfd, (void*)&updatedServer, sizeof(Server), 0);
+    if (recvBytes <= 0)
+    {
+        SysPrint(RED, false, "Error Trying to Join Server '%s', server->alias);
+        close(cfd);
+        
+        return;
+    }
+    
     localClient->connectedServer = &updatedServer;
 
     Chatroom(&updatedServer);
