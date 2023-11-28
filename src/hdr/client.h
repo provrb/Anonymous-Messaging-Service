@@ -1,9 +1,26 @@
+/**
+ * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
+ * @file       client.h
+ * @brief      control everything about clients
+ * 
+ * @note       
+ * @history:
+ *   Version   Date            Author          Modification    Email
+ *   V1.0.0    Oct-06-2023     Ethan Oliveira                  ethanjamesoliveira@gmail.com
+ * 
+ * @verbatim
+ * ==============================================================================
+ * 
+ * ==============================================================================
+ * @endverbatim
+ * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
+ */
+
 #ifndef __CLIENT_H__
 #define __CLIENT_H__
 
 #include "server.h"
 #include "browser.h"
-#include "backend.h"
 #include "root.h"
 
 /*
@@ -12,21 +29,6 @@
     Describes the user who is running the application.
 */
 extern User*  localClient; // Client struct
-
-/*
-    A structure representing a request
-    from a client to a server.
-
-    Contains information such as what command to perform,
-    and an optional 'CMessage' struct if the user wants
-    to relay the message to peer clients on the server.
-*/
-typedef struct ClientToServerRequest
-{
-    CommandFlag command; // Command to tell the server to perform
-    User        requestMaker; // User who is making the request
-    CMessage    optionalClientMessage; // (CMessage){0} if no message
-} ServerRequest;
 
 /*
     Allocate memory for the 'localClient'
@@ -112,6 +114,24 @@ int DefaultClientConnectionInfo();
     to be readable.
 */
 void DecryptPeerMessage(CMessage* message);
+
+/*
+    Connect a client to 'server'.
+
+    Runs Chatroom() to display ui
+    where they can input, recv,
+    and send messages to other clients.
+*/
+void* JoinServer(Server* server);
+
+/*
+    Exit the client application.
+
+    Safely removes the client and makes a request
+    to remove the client from any servers and update
+    the statistics on the root server. i.e online clients.
+*/
+void ExitAMS();
 
 /*
     Make a request from the localClient to their

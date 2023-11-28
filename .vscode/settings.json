@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "min_max_values.h": "c",
+        "server.h": "c",
+        "tools.h": "c"
+    }
+}

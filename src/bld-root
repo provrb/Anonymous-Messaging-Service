@@ -1,4 +1,3 @@
-hdr/backend.h 
 hdr/browser.h 
 hdr/ccmds.h 
 hdr/ccolors.h 
@@ -10,7 +9,6 @@ hdr/server.h
 hdr/tools.h
 hdr/min_max_values.h
 
-backend.c 
 browser.c 
 ccmds.c 
 cli.c 

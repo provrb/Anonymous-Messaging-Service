@@ -55,4 +55,5 @@ typedef enum ResponseCodes
 {
     k_rcRootOperationSuccessful = 0,    // Normal Success Code.
     k_rcInternalServerError = -192, // Something went wrong on the servers side
+    k_rcServerNameInUseError = -111, // Thrown when a client wants to make a server with the same naem
 } ResponseCode;

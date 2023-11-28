@@ -71,7 +71,7 @@ void LoadClientUserInterface() {
         pthread_t cmd_tid;
         if (pthread_create(&cmd_tid, NULL, HandleClientInput, NULL) != 0){
             SysPrint(RED, true, "*** ERROR CREATING HandleClientInput() THREAD. EXITING APPLICATION. ***");
-            ExitApp();
+            ExitAMS();
         }
 
         pthread_join(cmd_tid, NULL);
@@ -110,6 +110,7 @@ void DisplayServers() {
         Server server = serverList[servIndex];
         printf("\t[%i] - [%i/%i]: %s\n", servIndex+1, server.connectedClients, server.maxClients, server.alias);
     }
+    printf("\n");
 }
 
 /**
@@ -157,8 +158,8 @@ int Chatroom(Server* server) {
 
     // Clear previous terminal output
     ClearOutput();
-    SERVER_PRINT(CYN, "You are now connected to '%s'", server->alias);
-    SERVER_PRINT(CYN, "Use '--leave' to Disconnect.\n");
+    ServerPrint(CYN, "You are now connected to '%s'", server->alias);
+    ServerPrint(CYN, "Use '--leave' to Disconnect.\n");
 
     // Create thread to print other client messages to the screen
     pthread_t tid;
@@ -189,37 +190,46 @@ int Chatroom(Server* server) {
             message[strlen(message) - 1] = '\0';
         }
 
-        if (strlen(message) < 0)
-            continue;
-
-        if (strcmp(message, "--leave") == 0)
+        /*
+            Message is empty.
+        */
+        if (strlen(message) == 0)
         {
-            ResponseCode leaveRequest = MakeServerRequest(k_cfKickClientFromServer, *localClient, (CMessage){0});
-            break;
+            printf("\x1b[1A");
+            printf("\x1b[2K");
         }
-
-        CMessage cmsg = {0};
-        cmsg.cflag    = k_cfEchoClientMessageInServer;
-        cmsg.sender   = localClient;
-        strcpy(cmsg.message, message);
-        
-        ResponseCode requestStatus = MakeServerRequest(k_cfEchoClientMessageInServer, *localClient, cmsg);
-        
-        printf("\x1b[1A");
-        printf("\x1b[2K");
-        printf("\r");
-        
-        if (requestStatus == k_rcInternalServerError)
-            printf(RED "Failed to Send Message.\n" RESET);
         else
-            printf("%s: %s\n", localClient->handle, cmsg.message);
-        
-        sleep(1);
+        {
+            if (strcmp(message, "--leave") == 0)
+            {
+                ResponseCode leaveRequest = MakeServerRequest(k_cfKickClientFromServer, *localClient, (CMessage){0});
+                break;
+            }
+
+            CMessage cmsg = {0};
+            cmsg.cflag    = k_cfEchoClientMessageInServer;
+            cmsg.sender   = localClient;
+            strcpy(cmsg.message, message);
+            
+            ResponseCode requestStatus = MakeServerRequest(k_cfEchoClientMessageInServer, *localClient, cmsg);
+            
+            printf("\x1b[1A");
+            printf("\x1b[2K");
+            printf("\r");
+            
+            if (requestStatus == k_rcInternalServerError)
+                printf(RED "Failed to Send Message.\n" RESET);
+            else
+                printf("%s: %s\n", localClient->handle, cmsg.message);
+            
+            sleep(1);
+        }
     }
 
     ClearOutput();
     SysPrint(CYN, false, "Disconnected From the Server '%s'", server->alias);
     SplashScreen();
+    EnableTerminalInput();
     return 0;
 }
 

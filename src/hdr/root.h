@@ -19,7 +19,6 @@
 #define __ROOT_H__
 
 #include "server.h"
-#include "backend.h"
 #include "browser.h"
 
 /*
@@ -30,6 +29,30 @@
     will connect to this port
 */
 #define ROOT_PORT 18081 // Port the root server is running on
+
+/*
+    A struct representing a response to 
+    a root request made and handled.
+*/
+typedef struct Response
+{
+    ResponseFlag rflag; // Response flags, tell the client what to do or what has been done
+    ResponseCode rcode; // Response code/status code. Tell if the operation succeeded
+    void*  returnValue; // Expect returned thing from making the root request like a server list
+} RootResponse;
+
+
+/*
+    A struct that holds sufficient information needed
+    to make a request the root server can perform.
+*/
+typedef struct RootServerRequest
+{
+    CommandFlag cmdFlag;           // What command to tell root server to perform
+    User        user;              // User who is performing the request
+    Server      server;            // Related server to use when doing a command that involves server info. e.g: make new server
+    CMessage    clientSentMessage; // A message sent by client. empty string if no message. ENCRYPTED
+} RootRequest;
 
 /*
     An integer of the total online clients
@@ -48,6 +71,24 @@ extern User rootConnectedClients[];
     server information.
 */
 extern Server rootServer;
+
+/* 
+    Make a request to the root server.
+
+    The request is sent over a tcp socket by sending a 'RootRequest'
+    struct that includes everything about the request.
+    This function fills in the struct with the arguments provided.
+    
+    Once the root server receives the request, it will try and 
+    perform it. After it will return a struct called 'RootResponse'
+    that includes information about what happened on the root server.
+*/
+RootResponse MakeRootRequest(
+    CommandFlag    commandFlag,
+    Server    currentServer,
+    User      relatedClient, 
+    CMessage clientMessageInfo
+); 
 
 /*
     Do a request made from a client on the root server.

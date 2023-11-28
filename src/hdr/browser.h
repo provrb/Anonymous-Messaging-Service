@@ -26,19 +26,30 @@
 #include "cli.h"
 #include "ccolors.h"
 
-
-extern unsigned int onlineServers; // Number of online servers
-extern Server       serverList[kMaxServersOnline]; // List of all online servers
+/*
+    The number of currently online servers
+    in 'serverList'
+*/
+extern unsigned int onlineServers;
 
 /*
-    Add a server to the server list.
+    An array of all servers that are currently online.
 
-    Once the server is added to the server list
-    it will be viewable by clients and joinable.
-    All information about the server will be copied
-    and saved into the list.
+    Offline servers are removed from
+    this array automatically.
 */
-int AddServerToList(Server server);
+extern Server       serverList[kMaxServersOnline];
+
+/*
+    A hashmap of all servers created.
+
+    Used to find if a server is similiar to
+    a different one. For example, trying to
+    make a server you can check 'serverHashmap' and see
+    if a server is already made with the same info as requested
+    in O(1) time-complexity.
+*/
+extern Server       serverHashmap[kMaxServersOnline];
 
 /*
     Update the server list client-side.

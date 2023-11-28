@@ -13,6 +13,8 @@
 */
 int main() 
 {
+    ClearOutput();
+
     /* 
         Connect interrupted terminal input (i.e Ctrl+C) 
         to DisconnectClient() to make sure client gets

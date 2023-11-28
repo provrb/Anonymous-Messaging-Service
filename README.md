@@ -35,5 +35,3 @@ Decrypted once a peer client receives the message. Simple encryption method.
 - Bug fixes
 - Optimization
 - Make requests to a server
-- Removed 'UpdateClientInConnectedServer()' and 'k_cfUpdateClientInfoInServer' enum
-  - Useless

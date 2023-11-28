@@ -29,7 +29,7 @@ Command validCommands[] = {
     {"--si <server-name>"                        , "View Info Of a Server"            , NULL},
     {"--main"                                    , "Show The Main Menu"               , SplashScreen},
     // {"--dbg"                                     , "Toggle Debug mode"                , EnableDebugMode},
-    {"--quit"                                    , "Exit The Application"             , ExitApp},
+    {"--quit"                                    , "Exit The Application"             , ExitAMS},
     {"--joins <server-name>"                     , "Join Server With The Name"        , NULL},
     {"--makes <server-name> <port> <max-clients>", "Make a Server With Specified Name", NULL}
 };

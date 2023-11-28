@@ -20,24 +20,7 @@
 
 unsigned int onlineServers = 0;
 Server       serverList[kMaxServersOnline] = {0};
-
-/**
- * @brief           Add a valid server to server list
- * @param[in]       server: server to add
- * @return          int
- * @retval          success or failure
- */
-int AddServerToList(Server server) {
-    if (server.online == false){
-        printf("ERROR: Cannot add offline server to list");
-        return -1;
-    }
-
-    serverList[onlineServers] = server;
-    onlineServers++;
-
-    return 0;
-}
+Server       serverHashmap[kMaxServersOnline] = {0};
 
 Server* UpdateServerList() {
     RootResponse response = MakeRootRequest(
