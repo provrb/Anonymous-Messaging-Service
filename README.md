@@ -1,4 +1,4 @@
-# The Anonymous Messaging Service or AMS for Short
+# The Anonymous Messaging Service (AMS)
 WIP Command-line interface messaging application. Create temporary chat rooms and talk completely anonymously.
 
 # AMS:
@@ -13,12 +13,24 @@ _Better than IRC. More anonymous.
 Currently only for Linux operating systems.
 Created on Linux Mint in C/C++ with Visual Studio Code and compiled with GCC._
 
-# HOW CHATS ARE ENCRYPTED
+# How Chats Are Encrypted
 Currently all chats are encrypted on the server by being xor'd.
 Decrypted once a peer client receives the message. Simple encryption method.
 
 ~~The messages that pass to the server before reaching other clients in the CSServerChatroom are encrypted by AES-256 GCM.~~
 ~~An unbreakable brute-force encryption method used by the NSA and the US military.~~
+
+# Documentation
+All documentation needed for functions can be found in header files.
+  - Documentation in source files is a work in progress.
+- ## Function Prefix's
+  - CS: Client-side function
+
+  - SS: Server-side function
+
+  - RS: Root server function
+
+# Version History
 
 ## v1.0.1
 - Major code cleanup
@@ -43,3 +55,5 @@ Decrypted once a peer client receives the message. Simple encryption method.
   - Fixed segmentation fault on root server when client would disconnect
 - Removed unneccessary functions
 - Documentation in all header files now
+- Function prefixes. CS for client-side functions. SS for server-side functions. RS for only root server functions.
+- Improved error handling 
