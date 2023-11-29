@@ -23,7 +23,7 @@ Server       serverList[kMaxServersOnline] = {0};
 Server       serverHashmap[kMaxServersOnline] = {0};
 
 Server* UpdateServerList() {
-    RootResponse response = MakeRootRequest(
+    RootResponse response = CSMakeRootRequest(
         k_cfRequestServerList,
         (Server){0}, // no related server
         (User){0},  // no user
@@ -33,7 +33,7 @@ Server* UpdateServerList() {
     if (response.rcode != k_rcRootOperationSuccessful)
         return NULL;
     
-    // MakeRootRequest already updates serverList
+    // CSMakeRootRequest already updates serverList
     // and onlineServers client side
     // When k_cfRequestServerList is passed.
     return serverList;

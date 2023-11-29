@@ -22,7 +22,7 @@
 
 /*
     By default, the user interface is not laoded.
-    Changed when LoadClientUserInterface is called
+    Changed when CSLoadClientUserInterface is called
 */
 bool userInterfaceLoaded = false;
 
@@ -57,21 +57,21 @@ void SysPrint(const char* color, bool prefixNewline, const char* str, ...) {
  * @return          void*: Needed for threading
  * @retval          Does not return anything.
  */
-void LoadClientUserInterface() {
+void CSLoadClientUserInterface() {
     if (!userInterfaceLoaded)
     {
         userInterfaceLoaded = true;
 
         DefaultClientConnectionInfo();
-        SplashScreen();
+        CSSplashScreen();
 
-        DisplayCommands(); // Display commands when you load up
+        CSDisplayCommands(); // Display commands when you load up
         
         // Create a thread to handle client inpuit
         pthread_t cmd_tid;
-        if (pthread_create(&cmd_tid, NULL, HandleClientInput, NULL) != 0){
-            SysPrint(RED, true, "*** ERROR CREATING HandleClientInput() THREAD. EXITING APPLICATION. ***");
-            ExitAMS();
+        if (pthread_create(&cmd_tid, NULL, CSHandleClientInput, NULL) != 0){
+            SysPrint(RED, true, "*** ERROR CREATING CSHandleClientInput() THREAD. EXITING APPLICATION. ***");
+            CSExitAMS();
         }
 
         pthread_join(cmd_tid, NULL);
@@ -84,7 +84,7 @@ void LoadClientUserInterface() {
  * @return          int
  * @retval          represents success
  */
-void SplashScreen() {
+void CSSplashScreen() {
     struct tm* timestr = gmt();
     printf(CYN "\nWelcome to AMS! The Time Is: %02d:%02d:%02d UTC\n", timestr->tm_hour, timestr->tm_min, timestr->tm_sec);
     printf("  - Search and create your own servers.\n");
@@ -97,7 +97,7 @@ void SplashScreen() {
  * @return          int
  * @retval          success
  */
-void DisplayServers() {
+void CSDisplayServers() {
 
     UpdateServerList();
 
@@ -118,7 +118,7 @@ void DisplayServers() {
  * @return          int
  * @retval          represents success
  */
-void DisplayCommands() {
+void CSDisplayCommands() {
     int maxCommandLength = 0;
 
     // Find the maximum length of kCommandName to align the command names
@@ -154,7 +154,7 @@ void EnableTerminalInput() {
     system("stty echo");
 }
 
-int Chatroom(Server* server) {
+int CSServerChatroom(Server* server) {
 
     // Clear previous terminal output
     ClearOutput();
@@ -163,7 +163,7 @@ int Chatroom(Server* server) {
 
     // Create thread to print other client messages to the screen
     pthread_t tid;
-    if (pthread_create(&tid, NULL, ReceivePeerMessagesOnServer, (void*)server) < 0) {
+    if (pthread_create(&tid, NULL, CSReceivePeerMessagesOnServer, (void*)server) < 0) {
         printf("Internal server error. Aborting.\n");
         return -1;
     }
@@ -202,7 +202,7 @@ int Chatroom(Server* server) {
         {
             if (strcmp(message, "--leave") == 0)
             {
-                ResponseCode leaveRequest = MakeServerRequest(k_cfKickClientFromServer, *localClient, (CMessage){0});
+                ResponseCode leaveRequest = CSMakeServerRequest(k_cfKickClientFromServer, *localClient, (CMessage){0});
                 break;
             }
 
@@ -211,7 +211,7 @@ int Chatroom(Server* server) {
             cmsg.sender   = localClient;
             strcpy(cmsg.message, message);
             
-            ResponseCode requestStatus = MakeServerRequest(k_cfEchoClientMessageInServer, *localClient, cmsg);
+            ResponseCode requestStatus = CSMakeServerRequest(k_cfEchoClientMessageInServer, *localClient, cmsg);
             
             printf("\x1b[1A");
             printf("\x1b[2K");
@@ -228,7 +228,7 @@ int Chatroom(Server* server) {
 
     ClearOutput();
     SysPrint(CYN, false, "Disconnected From the Server '%s'", server->alias);
-    SplashScreen();
+    CSSplashScreen();
     EnableTerminalInput();
     return 0;
 }
@@ -239,7 +239,7 @@ int Chatroom(Server* server) {
  * @return          int
  * @retval          Success code
  */
-void DisplayServerInfo(char* serverName) {
+void CSDisplayServerInfo(char* serverName) {
     UpdateServerList();
     Server* server = ServerFromAlias(serverName);
     
@@ -265,8 +265,8 @@ void DisplayServerInfo(char* serverName) {
  * @return          int
  * @retval          0
  */
-void TotalOnlineServers() {
+void CSTotalOnlineServers() {
     UpdateServerList();
-    SysPrint(WHT UNDR, true, "There Are %i Online Servers", onlineServers);
+    SysPrint(CYN, true, "There Are %i Online Servers\n", onlineServers);
 }
 

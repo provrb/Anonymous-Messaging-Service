@@ -32,7 +32,7 @@
     Has the clients ui been loaded/printed yet?
     Make sure it ui is not printed more than once.
     
-    Prevents LoadClientUserInterface() from being ran
+    Prevents CSLoadClientUserInterface() from being ran
     multiple times and thus printing the ui more than once.
 */
 extern bool userInterfaceLoaded;
@@ -46,19 +46,19 @@ extern bool userInterfaceLoaded;
 
     Functions should be ran only once.
 */
-void LoadClientUserInterface(); // Main user interface
+void CSLoadClientUserInterface(); // Main user interface
 
 /*
     Main menu of the application. 
     Greets the user and shows a couple neat points/tips.
 */
-void SplashScreen();
+void CSSplashScreen();
 
 /*
     Display commands the user can perform and type.
     Prints all 'Command' structs from validCommands array.
 */
-void DisplayCommands();
+void CSDisplayCommands();
 
 /*
     Display all the online servers.
@@ -66,7 +66,7 @@ void DisplayCommands();
     Shows the servers index in 'serverList', 
     name, clients online and max allowed clients.
 */
-void DisplayServers();
+void CSDisplayServers();
 
 /*
     Display all the information about a server.
@@ -74,12 +74,12 @@ void DisplayServers();
     Takes in a server name and prints info about
     it if the server exists. Otherwise print an error message.
 */
-void DisplayServerInfo(char* serverName);
+void CSDisplayServerInfo(char* serverName);
 
 /*
     Print an integer representing how many servers are online.
 */
-void TotalOnlineServers();
+void CSTotalOnlineServers();
 
 /*
     Print an interface for the client to send messages
@@ -87,7 +87,7 @@ void TotalOnlineServers();
 
     Prints out messages sent by other clients.
 */
-int Chatroom(Server* server); // Chatroom for server
+int CSServerChatroom(Server* server); // CSServerChatroom for server
 
 /*
     System messages that can be printed with

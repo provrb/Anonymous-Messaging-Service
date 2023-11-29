@@ -17,7 +17,7 @@ Created on Linux Mint in C/C++ with Visual Studio Code and compiled with GCC._
 Currently all chats are encrypted on the server by being xor'd.
 Decrypted once a peer client receives the message. Simple encryption method.
 
-~~The messages that pass to the server before reaching other clients in the chatroom are encrypted by AES-256 GCM.~~
+~~The messages that pass to the server before reaching other clients in the CSServerChatroom are encrypted by AES-256 GCM.~~
 ~~An unbreakable brute-force encryption method used by the NSA and the US military.~~
 
 ## v1.0.1

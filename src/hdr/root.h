@@ -83,7 +83,7 @@ extern Server rootServer;
     perform it. After it will return a struct called 'RootResponse'
     that includes information about what happened on the root server.
 */
-RootResponse MakeRootRequest(
+RootResponse CSMakeRootRequest(
     CommandFlag    commandFlag,
     Server    currentServer,
     User      relatedClient, 
@@ -106,7 +106,7 @@ ResponseCode DoRootRequest(void* request);
     and update it. Finally send back the update client
     struct to them.
 */
-void* AcceptClientsToRoot();
+void* RSAcceptClientsToRoot();
 
 /*
     Perform request made to the root server from the client
@@ -117,7 +117,7 @@ void* AcceptClientsToRoot();
     
     TODO: Resource heavy so going to try another way. But this works for now
 */
-void* PerformRootRequestFromClient(void* client);
+void* RSPerformRootRequestFromClient(void* client);
 
 /*
     Create a root server which all clients connect to.
@@ -126,7 +126,7 @@ void* PerformRootRequestFromClient(void* client);
     server machine. All client instances must
     connect to this server to proceed in the app.
 */
-int CreateRootServer();
+int RSCreateRootServer();
 
 /*
     Remove a client from the root server server-sided.
@@ -135,7 +135,7 @@ int CreateRootServer();
     decrement onlineGlobalClients by one,
     and shutdown any servers the user made.
 */
-void DisconnectClientFromRootServer(User* user); 
+void SSDisconnectClientFromRootServer(User* user); 
 
 /*
     Disconnect 'user' from the server in connectedServer field.
@@ -145,7 +145,7 @@ void DisconnectClientFromRootServer(User* user);
     Otherwise, update the statistics of the server
     like connectedClients appropriately
 */
-void DisconnectClientFromServer(User* user);
+void SSDisconnectClientFromServer(User* user);
 
 /*
     Respond to a client who made a root request.
@@ -153,7 +153,7 @@ void DisconnectClientFromServer(User* user);
     Send a struct 'RootResponse' to give information
     or return values on their request that happened server-sided.
 */
-void RespondToRootRequestMaker(User* to, RootResponse response);
+void SSRespondToRootRequestMaker(User* to, RootResponse response);
 
 /*
     Update a server in serverList with 'updatedServerInfo'
@@ -161,6 +161,6 @@ void RespondToRootRequestMaker(User* to, RootResponse response);
     Gets the index of the server by searching names in serverList
     and replaces the 'Server' struct at that index with 'updatedServerInfo'
 */
-void UpdateServerWithNewInfo(Server* updatedServerInfo);
+void SSUpdateServerWithNewInfo(Server* updatedServerInfo);
 
 #endif // __ROOT_H__

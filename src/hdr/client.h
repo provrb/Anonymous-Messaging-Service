@@ -46,7 +46,7 @@ void MallocLocalClient();
     the root server, closes any of the clients sockets
     and cleans up anything allocated for that client/
 */
-void DisconnectClient(); // Disconnect from the root server
+void CSDisconnectClient(); // Disconnect from the root server
 
 /*
     FInd the index of a client in an array of 'User' structs
@@ -65,7 +65,7 @@ size_t ClientIndex(const User* arr[], size_t size, User* value);
     Local client must be connected to the server in
     'serverInfo' for the function to work.    
 */
-void ReceivePeerMessagesOnServer(void* serverInfo); // Receive messages from other clients in the server
+void CSReceivePeerMessagesOnServer(void* serverInfo); // Receive messages from other clients in the server
 
 /*
     Assign a default client username 
@@ -74,7 +74,7 @@ void ReceivePeerMessagesOnServer(void* serverInfo); // Receive messages from oth
     If the client does not select a name, this will 
     be their username throughout the lifetime of their app.
 */
-void AssignDefaultHandle(char defaultName[]); // Default Client Username
+void CSAssignDefaultHandle(char defaultName[]); // Default Client Username
 
 /*
     Make the client choose a username.
@@ -83,7 +83,7 @@ void AssignDefaultHandle(char defaultName[]); // Default Client Username
     select a username they will use throughout
     their stay on the app.
 */
-void ChooseClientHandle(); // Select your username
+void CSChooseClientHandle(); // Select your username
 
 /*
     Handle console commands entered by the client
@@ -92,7 +92,7 @@ void ChooseClientHandle(); // Select your username
     If a command doesn't exist print an error
     message.
 */
-void* HandleClientInput(); // handle commands entered by client
+void* CSHandleClientInput(); // handle commands entered by client
 
 /*
     Reset the clients connection info.
@@ -113,16 +113,23 @@ int DefaultClientConnectionInfo();
     When a client receives it, it must be decrypted
     to be readable.
 */
-void DecryptPeerMessage(CMessage* message);
+void CSDecryptPeerMessage(CMessage* message);
 
 /*
     Connect a client to 'server'.
 
-    Runs Chatroom() to display ui
+    Runs CSServerChatroom() to display ui
     where they can input, recv,
     and send messages to other clients.
 */
-void* JoinServer(Server* server);
+void* CSJoinServer(Server* server);
+
+/*
+    Leave 'server' and remove the
+    CSServerChatroom UI. Update the statistics
+    on the server.
+*/
+// void* CSLeaveServer(Server* server);
 
 /*
     Exit the client application.
@@ -131,7 +138,7 @@ void* JoinServer(Server* server);
     to remove the client from any servers and update
     the statistics on the root server. i.e online clients.
 */
-void ExitAMS();
+void CSExitAMS();
 
 /*
     Make a request from the localClient to their
@@ -141,7 +148,7 @@ void ExitAMS();
     'optionalClientMessage' is used if you want to
     send a normal message to other peer clients in 'server'
 */
-ResponseCode MakeServerRequest(
+ResponseCode CSMakeServerRequest(
     CommandFlag command,
     User        requestMaker,
     CMessage    optionalClientMessage
@@ -153,7 +160,7 @@ ResponseCode MakeServerRequest(
     Must be called so that the program can resume
     and the client can take and make requests.
 */
-int ConnectToRootServer();
+int CSConnectToRootServer();
 
 /*
     Disconnect from localClients connected server.
@@ -161,6 +168,6 @@ int ConnectToRootServer();
     Make a server request asking to be kicked
     and update the server list.
 */
-void LeaveConnectedServer();
+void CSLeaveConnectedServer();
 
 #endif // __CLIENT_H__

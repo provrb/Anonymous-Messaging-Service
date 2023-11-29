@@ -39,7 +39,7 @@ void ServerPrint(const char* color, const char* str, ...) {
     printf(RESET "\n");
 }
 
-void* ListenForRequestsOnServer(void* server)
+void* SSListenForRequestsOnServer(void* server)
 {
     Server* serverToListenOn = (Server*)server;
 
@@ -97,20 +97,18 @@ Server* ServerFromAlias(char* alias) {
  * @return          void*
  * @retval          None
  */
-void* ServerAcceptThread(void* serverInfo)
+void* SSAcceptClientsOnServer(void* serverInfo)
 {
     // Server info
     Server* server = (Server*)serverInfo; 
 
-    pthread_t activeClientThreads[server->maxClients];
-    int numOfClientThreads = -1;
-    
-    pthread_t activeClientServerThreads[server->maxClients];
-    int numOfClientServerThreads = -1;
-
+    /*
+        Listen for an incoming connections to
+        the server from clients.
+    */
     int lstn = listen(server->sfd, server->maxClients);
     if (lstn < 0) {
-        printf("listen: errno %i\n", errno);
+        SysPrint(RED, false, "Error while listening on server '%s'", server->alias);
         close(server->sfd);
         return;
     }
@@ -120,16 +118,18 @@ void* ServerAcceptThread(void* serverInfo)
     Server dereferencedServer = *server;
 
     int cfd = 0; // client file descriptor. get it from accepting the client
+
     while (1)
     {
         cfd = accept(dereferencedServer.sfd, NULL, NULL);
 
         if (cfd < 0) {
-            // printf("accept: errno %i\n", errno);
-            // close(server->sfd);
             continue;
         }
 
+        // Receive User struct from the client
+        // Who is trying to connect to the server
+        // and add it to the servers client list
         User receivedUserInfo = {0};
         int clientInfo = recv(cfd, (void*)&receivedUserInfo, sizeof(User), 0);  
 
@@ -138,19 +138,32 @@ void* ServerAcceptThread(void* serverInfo)
         else if (clientInfo == 0) // client disconnected
             break;
 
+        /*
+            Update info on the server and
+            also update the client info server-sided
+        */
         dereferencedServer.clientList[dereferencedServer.connectedClients] = &receivedUserInfo;
         dereferencedServer.connectedClients++;
-
         receivedUserInfo.cfd = cfd;
         receivedUserInfo.connectedServer = &dereferencedServer;
 
         pthread_t tid;
-        pthread_create(&tid, NULL, ListenForRequestsOnServer, (void*)&dereferencedServer);
+        if (pthread_create(&tid, NULL, SSListenForRequestsOnServer, (void*)&dereferencedServer) < 0)
+        {
+            SysPrint(RED, false, "Error while running SSListenForRequestsOnServer() on Server '%s'.", dereferencedServer.alias);
+            SSShutdownServer(&dereferencedServer);
+            break;
+        }
 
         // Send the server info
         int sentServerInfo = send(cfd, (void*)&dereferencedServer, sizeof(dereferencedServer), 0);
-
-        // TODO: handle situation where send fails
+        if (sentServerInfo <= 0)
+        {
+            SysPrint(RED, false, "Error accepting user '%s' to root server.", receivedUserInfo.handle);
+            close(cfd);
+            SSDisconnectClientFromServer(&dereferencedServer);
+            continue;
+        }
     }
 
     pthread_exit(NULL);
@@ -161,12 +174,12 @@ void* ServerAcceptThread(void* serverInfo)
  * @param[in]       serverArgsStruct: Thread_AcceptArgs struct with parameters
  * @return          void*
  */
-void* ServerBareMetal(void* serverStruct)
+void* SSServerBareMetal(void* serverStruct)
 {
 
     /* 
      * Create struct representing server
-     * Used to resolve information about a chatroom
+     * Used to resolve information about a CSServerChatroom
      */
     ServerCreationInfo* creationInfo = (ServerCreationInfo*)serverStruct;
     Server*             serverInfo   = creationInfo->serverInfo; // The info the user provided about the server they want to make
@@ -194,7 +207,7 @@ void* ServerBareMetal(void* serverStruct)
     int sfd = socket(serverInfo->domain, serverInfo->type, 0);
     if (sfd == -1) {
         ServerPrint(RED, "[ERROR]: Failed Creating Socket. Error Code %i", errno);
-        RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
+        SSRespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
 
@@ -202,7 +215,7 @@ void* ServerBareMetal(void* serverStruct)
     int bnd = bind(sfd, (struct sockaddr * )&addrInfo, sizeof(addrInfo));
     if (bnd == -1) {
         ServerPrint(RED, "[ERROR]: Failed Binding Socket. Error Code %d", errno);
-        RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
+        SSRespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
 
@@ -210,7 +223,7 @@ void* ServerBareMetal(void* serverStruct)
     int lsn = listen(sfd, serverInfo->maxClients);
     if (lsn == -1) {
         ServerPrint(RED, "[ERROR]: Error while listening. Error Code %d", errno);
-        RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
+        SSRespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
 
@@ -218,16 +231,17 @@ void* ServerBareMetal(void* serverStruct)
     User hostCopy = *creationInfo->clientAKAhost;
 
     serverInfo->connectedClients = 0;
-    serverInfo->host       = &hostCopy;
-    serverInfo->domain     = creationInfo->serverInfo->domain;
-    serverInfo->isRoot     = false;
-    serverInfo->port       = serverInfo->port;
-    serverInfo->type       = serverInfo->type;
-    serverInfo->maxClients = creationInfo->serverInfo->maxClients;
-    serverInfo->sfd        = sfd;
-    serverInfo->addr       = addrInfo;
-    serverInfo->online     = true; // True. Server online and ready
-    serverInfo->clientList = (User**)malloc(sizeof(User*) * serverInfo->maxClients); // Allocate memory for the servers client list
+    serverInfo->host             = &hostCopy;
+    serverInfo->domain           = creationInfo->serverInfo->domain;
+    serverInfo->isRoot           = false;
+    serverInfo->port             = serverInfo->port;
+    serverInfo->type             = serverInfo->type;
+    serverInfo->maxClients       = creationInfo->serverInfo->maxClients;
+    serverInfo->sfd              = sfd;
+    serverInfo->addr             = addrInfo;
+    serverInfo->online           = true; // True. Server online and ready
+    serverInfo->clientList       = (User**)malloc(sizeof(User*) * serverInfo->maxClients); // Allocate memory for the servers client list
+    serverInfo->blacklistedClients = 0;
     strcpy(serverInfo->alias, creationInfo->serverInfo->alias);
     
     // add server to hash map server list
@@ -241,10 +255,17 @@ void* ServerBareMetal(void* serverStruct)
     response.rcode = k_rcRootOperationSuccessful;
     response.returnValue = NULL;
     response.rflag = k_rfRequestedDataUpdated;
-    RespondToRootRequestMaker(serverInfo->host, response);
 
     pthread_t tid;
-    pthread_create(&tid, NULL, ServerAcceptThread, (void*)serverInfo);
+    if (pthread_create(&tid, NULL, SSAcceptClientsOnServer, (void*)serverInfo) < 0)
+    {
+        SysPrint(RED, false, "Error accepting clients on server '%s'", serverInfo->alias);
+        SSShutdownServer(serverInfo);
+        return;
+    }
+    
+    SSRespondToRootRequestMaker(serverInfo->host, response);
+    
     pthread_join(tid, NULL);
     return;
 
@@ -255,7 +276,7 @@ server_close:
 }
 
 /** 
- * @brief           Wrapper for ServerBareMetal()
+ * @brief           Wrapper for SSServerBareMetal()
  * @param[in]       domain:     Domain for the socket
  * @param[in]       type:       Type of the socket
  * @param[in]       protocol:   Protocol for the socket
@@ -266,7 +287,7 @@ server_close:
  * @return          int
  * @retval          Server Status or Setup status
  */
-int MakeServer(
+int CSMakeServer(
     int domain, // AF_INET
     int type, // SOCK_STREAM
     int protocol, // USUALLY ZERO
@@ -276,19 +297,19 @@ int MakeServer(
 )
 {
 
+    if (localClient->serversCreated >= 1){
+        SysPrint(RED, false, "Server Already Made Named '%s'.\n", localClient->ownedServer->alias);
+        return -1;
+    }
+
     // Make sure server name follows rules
     if (strlen(alias) < kMinServerAliasLength){
-        SysPrint(YEL, true, "[WARNING]: Server Name Too Short. Min %i.\n", kMinServerAliasLength);
+        SysPrint(YEL, false, "[WARNING]: Server Name Too Short. Min %i.\n", kMinServerAliasLength);
         return -1;
     }
 
     if (strlen(alias) > kMaxServerAliasLength){
-        SysPrint(YEL, true, "[WARNING]: Server Name Longer Than (%i) Chars.\n", kMaxServerAliasLength);
-        return -1;
-    }
-
-    if (strstr(alias, " ") != NULL){
-        SysPrint(YEL, true, "[WARNING]: Server Name Cannot Have Spaces. Select a Different Name.\n");
+        SysPrint(YEL, false, "[WARNING]: Server Name Longer Than (%i) Chars.\n", kMaxServerAliasLength);
         return -1;
     }
 
@@ -332,9 +353,13 @@ int MakeServer(
     strcpy(serv.alias, alias);
     
     // Tell root server to host a server
-    RootResponse response = MakeRootRequest(k_cfMakeNewServer, serv, *localClient, (CMessage){0});
+    RootResponse response = CSMakeRootRequest(k_cfMakeNewServer, serv, *localClient, (CMessage){0});
     if (response.rcode == k_rcRootOperationSuccessful)
+    {
         SysPrint(CYN, false, "Server '%s' Created on Port '%i'\n", serv.alias, serv.port);
+        localClient->serversCreated++;
+        localClient->ownedServer = &serv;
+    }
     else if (response.rcode == k_rcServerNameInUseError)
         // Server name is used error
         SysPrint(YEL, false, "Name '%s' Already In Use.\n", serv.alias);
@@ -349,7 +374,7 @@ bool IsUserHost(User user, Server* server)
     return (strcmp(user.handle, server->host->handle) == 0);
 }
 
-void ShutdownServer(Server* server)
+void SSShutdownServer(Server* server)
 {
     printf("Server shutdown requested for '%s'...\n", server->alias);
     
@@ -390,7 +415,7 @@ void ShutdownServer(Server* server)
     printf("Server closed successfully... Done\n");
 }
 
-void EncryptClientMessage(CMessage* message)
+void SSEncryptClientMessage(CMessage* message)
 {
     // TODO: Use aes lib
 
@@ -410,13 +435,16 @@ ResponseCode DoServerRequest(ServerRequest request)
 
     switch (request.command)
     {
+    case k_cfBanClientFromServer:
+        Server* server = sender.connectedServer;
+        server->clientBlacklist[server->blacklistedClients++] = sender;
     case k_cfKickClientFromServer:
-        DisconnectClientFromServer(&sender);
+        SSDisconnectClientFromServer(&sender);
         break;
     case k_cfEchoClientMessageInServer:
         Server* connectedServer = sender.connectedServer;
 
-        EncryptClientMessage(&request.optionalClientMessage);
+        SSEncryptClientMessage(&request.optionalClientMessage);
 
         // relay encrypted message to all connected clients
         for (int ci = 0; ci < connectedServer->connectedClients; ci++)

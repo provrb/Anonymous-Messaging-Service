@@ -4,17 +4,17 @@
 
 User* localClient = { 0 }; // Current client who ran the app
 
-void MallocLocalClient() {
+void MallocLocalClient() 
+{
     localClient = (User*)malloc(sizeof(User));
 }
 
-void ExitAMS(){ 
-    DisconnectClient();
-    SysPrint(CYN, true, "Exiting Application.");
-    exit(EXIT_SUCCESS); 
+void CSExitAMS() 
+{ 
+    CSDisconnectClient();
 }
 
-void DecryptPeerMessage(CMessage* message)
+void CSDecryptPeerMessage(CMessage* message)
 {
     for (int charIndex = 0; charIndex<strlen(message->message); charIndex++)
     {
@@ -22,7 +22,7 @@ void DecryptPeerMessage(CMessage* message)
     }
 }
 
-void* JoinServer(Server* server) {
+void* CSJoinServer(Server* server) {
     int cfd = socket(server->domain, server->type, server->protocol);
     if (cfd < 0){
         SysPrint(RED, true, "Failed to create client socket. Errno %i", errno);
@@ -35,20 +35,12 @@ void* JoinServer(Server* server) {
         return;
     }
 
-    localClient->addressInfo = server->addr;
-    localClient->cfd = cfd;
-    localClient->connectedServer = server;
-
-    printf("about to enter chat room: %s\n", localClient->handle);
-    User dereferenceClient = *localClient;
-
     // Send client info to server you're joining
+    User dereferenceClient = *localClient;
     int sentBytes = send(cfd, (void*)&dereferenceClient, sizeof(dereferenceClient), 0);
-    
-    // TODO: HANDLE SITUATIONS THAT SEND BREAKS
-    if (sentBytes <= 0) // Error. Stop chatroom joining process.
+    if (sentBytes <= 0) // Error. Stop CSServerChatroom joining process.
     {
-        SysPrint(RED, false, "Error Trying to Join Server '%s', server->alias);
+        SysPrint(RED, false, "Error Trying to Join Server '%s'", server->alias);
         close(cfd);
         
         return;
@@ -59,18 +51,20 @@ void* JoinServer(Server* server) {
     int recvBytes = recv(cfd, (void*)&updatedServer, sizeof(Server), 0);
     if (recvBytes <= 0)
     {
-        SysPrint(RED, false, "Error Trying to Join Server '%s', server->alias);
+        SysPrint(RED, false, "Error Trying to Join Server '%s'", server->alias);
         close(cfd);
         
         return;
     }
     
+    localClient->addressInfo = server->addr;
+    localClient->cfd = cfd;
     localClient->connectedServer = &updatedServer;
 
-    Chatroom(&updatedServer);
+    CSServerChatroom(&updatedServer);
 }
 
-ResponseCode MakeServerRequest(
+ResponseCode CSMakeServerRequest(
     CommandFlag command,
     User        requestMaker,
     CMessage    optionalClientMessage
@@ -118,7 +112,7 @@ size_t ClientIndex(const User* arr[], size_t size, User* value)
     return -1;
 }
 
-void DisconnectClient(){
+void CSDisconnectClient(){
     SysPrint(UNDR WHT, true, "Disconnecting '%s'", localClient->handle);
 
     /*
@@ -131,9 +125,9 @@ void DisconnectClient(){
     exit(EXIT_SUCCESS);
 }
 
-void LeaveConnectedServer()
+void CSLeaveConnectedServer()
 {
-    ResponseCode req = MakeServerRequest(k_cfKickClientFromServer,
+    ResponseCode req = CSMakeServerRequest(k_cfKickClientFromServer,
                                         *localClient,
                                         (CMessage){0}
                                         );
@@ -144,7 +138,7 @@ void LeaveConnectedServer()
     localClient->cfd = 0;
 }
 
-void ReceivePeerMessagesOnServer(void* serverInfo)
+void CSReceivePeerMessagesOnServer(void* serverInfo)
 {
     Server* server = (Server*)serverInfo;
     
@@ -171,12 +165,12 @@ void ReceivePeerMessagesOnServer(void* serverInfo)
         else if (receivedBytes == 0 && server->online == false) // Server was shutdown
         {
             ServerPrint(YEL, "Server Was Shutdown. Quitting.");
-            LeaveConnectedServer();
+            CSLeaveConnectedServer();
             break;
         }
 
         if (strlen(receivedCMessage.message) > 0)
-            DecryptPeerMessage(&receivedCMessage);
+            CSDecryptPeerMessage(&receivedCMessage);
 
         /*
             Find out what the peer wants us to do with
@@ -195,13 +189,11 @@ void ReceivePeerMessagesOnServer(void* serverInfo)
                 Request the server to remove local client.
             */
             
-            LeaveConnectedServer();
+            CSLeaveConnectedServer();
             ServerPrint(RED, "You have been kicked from '%s'\n", server->alias);
             return;
-        case k_cfBanClientFromServer:
-            // TODO: Add an array of banned clients to Server struct and add this user to it.
-            
-            LeaveConnectedServer();
+        case k_cfBanClientFromServer:            
+            CSLeaveConnectedServer();
             ServerPrint(RED, "You Have Been Banned From '%s'\n", server->alias);
             return;
         default:
@@ -216,7 +208,7 @@ void ReceivePeerMessagesOnServer(void* serverInfo)
  * @return          void*
  * @retval          Nothing.
  */
-void* HandleClientInput(){
+void* CSHandleClientInput(){
     while (1) {
         char cmd[100];
         bool validCmd = false;
@@ -252,7 +244,7 @@ void* HandleClientInput(){
                 continue;
             }
 
-            DisplayServerInfo(serverName);
+            CSDisplayServerInfo(serverName);
             validCmd = true;
         }
 
@@ -276,7 +268,7 @@ void* HandleClientInput(){
                 // ServerFromAlias returns null if no server is found
                 SysPrint(RED, true, "No Server Found With That Name.");
             else
-                JoinServer(server);
+                CSJoinServer(server);
 
             validCmd = true;
         }
@@ -293,7 +285,7 @@ void* HandleClientInput(){
 
             SysPrint(CYN, true, "Making Server '%s' on Port '%i'", serverName, port);
 
-            int serverCreated = MakeServer(AF_INET, SOCK_STREAM, 0, port, maxClients, serverName);
+            int serverCreated = CSMakeServer(AF_INET, SOCK_STREAM, 0, port, maxClients, serverName);
             validCmd = true;
         }
 
@@ -309,7 +301,7 @@ void* HandleClientInput(){
 
         if (!validCmd)
         {
-            SysPrint(RED, true, "Unknown Command. Enter --help to view commands.");
+            SysPrint(RED, true, "Unknown Command. Enter --help to view commands.\n");
             continue;
         }
     }
@@ -321,7 +313,7 @@ void* HandleClientInput(){
  * @brief           Choose your username throughout the stay on the app
  * @retval          Nothing
  */
-void ChooseClientHandle() {
+void CSChooseClientHandle() {
     bool warned = false;
     bool goodUsername = false; // Does the client username inputted follow the rules
 
@@ -365,7 +357,7 @@ void ChooseClientHandle() {
     SysPrint(CYN, false, "You will now be known as: '%s' for this session.", localClient->handle);
 }
 
-void AssignDefaultHandle(char defaultName[]) {
+void CSAssignDefaultHandle(char defaultName[]) {
     time_t now = time(NULL);
     struct tm* timestr = gmtime(&now);
 
@@ -390,7 +382,7 @@ int DefaultClientConnectionInfo() {
  * @return          int
  * @retval          success
  */
-int ConnectToRootServer() {
+int CSConnectToRootServer() {
     // Fill out information about the root server used to establish client connection.
 
     printf("Filling root server struct... ");

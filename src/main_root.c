@@ -18,7 +18,7 @@ int main() {
         Hosted on the machine thats running the 
         root application.
     */
-    if (CreateRootServer() != 0) 
+    if (RSCreateRootServer() != 0) 
     {
         SysPrint(RED, false, "Failed Making Root Server. Error Code: %i\n", errno);
         return -1;
@@ -28,7 +28,7 @@ int main() {
         Listen and accept any client connections
         to the root server
     */
-    AcceptClientsToRoot();
+    RSAcceptClientsToRoot();
 
     return 0;
 }
