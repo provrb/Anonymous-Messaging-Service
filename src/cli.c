@@ -60,9 +60,8 @@ void SysPrint(const char* color, bool prefixNewline, const char* str, ...) {
 void CSLoadClientUserInterface() {
     if (!userInterfaceLoaded)
     {
+        
         userInterfaceLoaded = true;
-
-        DefaultClientConnectionInfo();
         CSSplashScreen();
 
         CSDisplayCommands(); // Display commands when you load up
