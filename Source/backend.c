@@ -16,9 +16,12 @@
  * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  */
 
-#include "hdr/backend.h"
-#include "hdr/browser.h"
+#include "Headers/backend.h"
+#include "Headers/browser.h"
 #include <netdb.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
 /**
  * @brief           Get a Server struct from a server alias(name)
@@ -27,6 +30,11 @@
  * @retval          Struct of info about the server
  */
 Server* ServerFromAlias(char* alias) {
+    bool duplicateNames = false;
+    int foundServers = 0;
+    Server* sarr[] = {};
+    Server* foundServer = NULL;
+
     for (int i=0; i < onlineServers; i++){
         Server* server = &serverList[i];
 
@@ -36,10 +44,50 @@ Server* ServerFromAlias(char* alias) {
 
             // Compare everything lowercased
             if (strcmp(server->alias, alias) == 0)
-                return server;
+            {
+                sarr[foundServers] = server;
+                foundServers+=1;
+                foundServer = server;
+            }
         }
     }
-    return NULL;
+
+    if (foundServers > 1)
+    {
+        // Ask user which to choose
+        printf(UNDR "Choose Between These %i Servers\n" RESET, foundServers);
+        duplicateNames = true;
+        Server* server = NULL;
+
+        // TODO: FIX
+        for (int i = 0; i < foundServers; i++)
+        {
+            server = sarr[i];
+            printf("%i: [%i/%i] Host: %s - Server Name: %s\n", i, server->connectedClients, server->maxClients, server->host.handle, server->alias);
+        }
+
+        while (1)
+        {
+            char option[10];
+
+            printf("Option: ");
+
+            fgets(option, 10, stdin);
+            
+            // Remove the trailing newline character if it exists
+            if (option[strlen(option) - 1] == '\n') {
+                option[strlen(option) - 1] = '\0';
+            }
+
+            if (atoi(option) <= foundServers)
+            {
+                foundServer = sarr[atoi(option)];
+                break;
+            }
+        }
+    }
+
+    return foundServer;
 }
 
 /**
@@ -103,6 +151,7 @@ void* JoinServer(Server* server) {
 
 void* JoinServerByName(void* name){ // Join server from its alias
     UpdateServerList();
+
     Server* server = ServerFromAlias((char*)name);
     if (!server) { // ServerFromAlias returns null if no server is found
         SysPrint(RED, true, "No Server Found With That Name.");

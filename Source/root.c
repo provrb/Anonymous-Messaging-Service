@@ -16,7 +16,7 @@
  * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  */
 
-#include "hdr/root.h"
+#include "Headers/root.h"
 
 /*
     Global statistics about the
@@ -212,7 +212,7 @@ ResponseCode DoRootRequest(void* req)
             break;
 
         // shift array to remove that server
-        for(int b=index; b < onlineServers - 1; b++) 
+        for (int b=index; b < onlineServers - 1; b++) 
             serverList[b] = serverList[b + 1]; 
         
         onlineServers--;
@@ -220,18 +220,16 @@ ResponseCode DoRootRequest(void* req)
         RespondToRootRequestMaker(&request.user, response);
         break;
     case k_cfMakeNewServer: // Make new server and run it
-        // Make sure port isnt in use
-
-        // Try and find the port in the hash map
-        
         // Index will be the port hashed by max servers allowed online
         int indexInList = request.server.port % kMaxServersOnline;
 
+        // Make sure port isnt in use
+        // Try and find the port in the hash map
         // Check if ports in use
-        if (portList[indexInList].port == request.server.port)
+        if (portList[indexInList].port == request.server.port && portList[indexInList].inUse)
         {
             // in use
-            response.rcode = k_rcInternalServerError;
+            response.rcode = k_rcErrorPortInUse;
             response.returnValue = (void*)request.server.port;
             response.rflag = k_rfSentDataWasUnused;
             RespondToRootRequestMaker(&request.user, response);
@@ -239,15 +237,10 @@ ResponseCode DoRootRequest(void* req)
         }
 
         // Add it to the list of ports
-
-        // hash it
-        int hashWhichIsAlsoTheListIndex = request.server.port % kMaxServersOnline;
-        
-        // Add port to list
         PortDesc portInfo = {0};
         portInfo.inUse = true;
         portInfo.port = request.server.port;
-        portList[hashWhichIsAlsoTheListIndex] = portInfo;
+        portList[indexInList] = portInfo;
 
         ServerCreationInfo creationInfo = {0};
         creationInfo.serverInfo = &request.server;
@@ -280,12 +273,12 @@ void* AcceptClientsToRoot() {
     int activeClientThreads = 0; // The number of active client threads
 
     while (1) {
-        int cfd = accept(rootServer.sfd, (struct sockaddr*)NULL, NULL);
-
         // Make sure onlineGlobalClients does not exceed max allowed clients
         if (onlineGlobalClients + 1 >= kMaxGlobalClients)
             continue;
-        else if (cfd < 0) // Bad client file descriptor.
+        int cfd = accept(rootServer.sfd, (struct sockaddr*)NULL, NULL);
+        
+        if (cfd < 0) // Bad client file descriptor.
             continue;
 
         // Receive client info on join
@@ -404,7 +397,7 @@ void DisconnectClientFromRootServer(User* usr) {
     }
 
     // remove client from rootConnectedClients by shifting array
-    for(int i = index; i < onlineGlobalClients - 1; i++) 
+    for (int i = index; i < onlineGlobalClients - 1; i++) 
         rootConnectedClients[i] = rootConnectedClients[i + 1]; 
 
     // Check if client is connected to server
@@ -419,7 +412,7 @@ void DisconnectClientFromRootServer(User* usr) {
 
         // remove client from connected server client list by shifting array
         // Decrease connected clients 
-        for(int i = index; i < usr->connectedServer->connectedClients - 1; i++) 
+        for (int i = index; i < usr->connectedServer->connectedClients - 1; i++) 
             usr->connectedServer->clientList[i] = usr->connectedServer->clientList[i + 1]; 
 
         if (IsUserHost(*usr, usr->connectedServer))
@@ -506,7 +499,7 @@ void DisconnectClientFromServer(User* user) {
     }            
 
     // shift array to remove client from clientlist
-    for(int b=index; b < server->connectedClients-1; b++) 
+    for (int b=index; b < server->connectedClients-1; b++) 
         server->clientList[b] = server->clientList[b + 1]; 
 
     server->connectedClients--;

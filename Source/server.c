@@ -19,11 +19,11 @@
 
 bool DEBUG = false; // Debug mode
 
-#include "hdr/server.h"
-#include "hdr/browser.h"
-#include "hdr/client.h"
-#include "hdr/ccmds.h"
-#include "hdr/tools.h"
+#include "Headers/server.h"
+#include "Headers/browser.h"
+#include "Headers/client.h"
+#include "Headers/ccmds.h"
+#include "Headers/tools.h"
 
 PortDesc portList[] = {};
 
@@ -177,6 +177,20 @@ void* ServerBareMetal(void* serverStruct)
         RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
+    
+    /*
+        We set SO_REUSEADDR to true, in case a server
+        that previously used this port is closed but 
+        we cant create another socket with this port because of
+        the TIME_WAIT state in the kernel.
+    */
+    int optVal = 1;
+    int set = setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &optVal, sizeof(optVal));
+    if (set < 0) {
+        ServerPrint(RED, "setsockopt() for SO_REUSEADDR failed. Maybe port is in use.");
+        RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
+        goto server_close;
+    }
 
     // Bind socket to the address info provided
     int bnd = bind(sfd, (struct sockaddr * )&addrInfo, sizeof(addrInfo));
@@ -197,8 +211,9 @@ void* ServerBareMetal(void* serverStruct)
     /* Server online, fill in rest of info */
     User hostCopy = *creationInfo->clientAKAhost;
 
+    serverInfo->serverId   = randint(1092);
     serverInfo->connectedClients = 0;
-    serverInfo->host       = &hostCopy;
+    serverInfo->host       = hostCopy;
     serverInfo->domain     = creationInfo->serverInfo->domain;
     serverInfo->isRoot     = false;
     serverInfo->port       = serverInfo->port;
@@ -217,7 +232,7 @@ void* ServerBareMetal(void* serverStruct)
     response.rcode = k_rcRootOperationSuccessful;
     response.returnValue = NULL;
     response.rflag = k_rfRequestedDataUpdated;
-    RespondToRootRequestMaker(serverInfo->host, response);
+    RespondToRootRequestMaker(&serverInfo->host, response);
 
     pthread_t tid;
     pthread_create(&tid, NULL, ServerAcceptThread, (void*)serverInfo);
@@ -321,13 +336,16 @@ int MakeServer(
 
 bool IsUserHost(User user, Server* server)
 {
-    return (strcmp(user.handle, server->host->handle) == 0);
+    return (strcmp(user.handle, server->host.handle) == 0);
 }
 
 void ShutdownServer(Server* server)
 {
     printf("Server shutdown requested for '%s'...\n", server->alias);
     
+    if (shutdown(server->sfd, SHUT_RDWR) < 0)
+        printf("Error Calling 'shutdown()' for Server. Error Code %i\n", errno);
+
     server->online = false;
 
     // Unuse port
@@ -336,7 +354,7 @@ void ShutdownServer(Server* server)
 
     printf("Disconnecting all clients from server... ");
     for (int cl_index=0; cl_index<server->connectedClients; cl_index++)
-    {
+    {-
         close(server->clientList[cl_index]->cfd);
         memset(server->clientList[cl_index]->connectedServer, 0, sizeof(Server));
     }

@@ -16,7 +16,7 @@
  * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  */
 
-#include "hdr/browser.h"
+#include "Headers/browser.h"
 
 unsigned int onlineServers = 0;
 Server       serverList[kMaxServersOnline] = {0};

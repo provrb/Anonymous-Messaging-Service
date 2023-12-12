@@ -1,6 +1,6 @@
 
-#include "hdr/client.h"
-#include "hdr/ccolors.h"
+#include "Headers/client.h"
+#include "Headers/ccolors.h"
 
 User* localClient = { 0 }; // Current client who ran the app
 
@@ -69,10 +69,10 @@ void DisconnectClient(){
     // Remove client from root connected clients
 
     SysPrint(WHT, true, "Disconnecting %s", localClient->handle);
-    RootResponse response = MakeRootRequest(k_cfDisconnectClientFromRoot, rootServer, *localClient, (CMessage){0});
-    if (response.rcode = k_rcRootOperationSuccessful){
-        SysPrint(GRN, false, "Disconnected. Goodbye");
-    }
+    // RootResponse response = MakeRootRequest(k_cfDisconnectClientFromRoot, rootServer, *localClient, (CMessage){0});
+    // if (response.rcode = k_rcRootOperationSuccessful){
+    //     SysPrint(GRN, false, "Disconnected. Goodbye");
+    // }
 
     exit(EXIT_SUCCESS);
 }
@@ -364,8 +364,8 @@ int ConnectToRootServer() {
     
     printf("Done\n");
     fprintf(stderr, "Connecting client socket to main server... ");
-    // Attempt to retry connection again if it fails.
 
+    // Attempt to retry connection again if it fails.
     int attempts = 0;
     do {
         int con = connect(cfd, (struct sockaddr*)&addr, sizeof(addr));

@@ -3,8 +3,8 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <signal.h>
-#include "hdr/server.h"
-#include "hdr/client.h"
+#include "Headers/server.h"
+#include "Headers/client.h"
 
 /*
     Allocate memory and load client.

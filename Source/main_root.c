@@ -3,8 +3,8 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <signal.h>
-#include "hdr/server.h"
-#include "hdr/client.h"
+#include "Headers/server.h"
+#include "Headers/client.h"
 
 
 int main() {
@@ -18,6 +18,9 @@ int main() {
         Hosted on the machine thats running the 
         root application.
     */
+    // pthread_t tid;
+    // pthread_create(&tid, NULL, (void*)CreateRootServer, NULL);
+
     if (CreateRootServer() != 0) 
     {
         SysPrint(RED, false, "Failed Making Root Server. Error Code: %i\n", errno);

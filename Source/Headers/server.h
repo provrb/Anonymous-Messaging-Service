@@ -35,8 +35,8 @@
 
 #include "ccolors.h"
 #include "flags.h"
-#include "../ext/aes.h"
-#include "../ext/aes-gcm.h"
+#include "../External/aes.h"
+#include "../External/aes-gcm.h"
 #include "min_max_values.h"
 
 // Debug mode. Allows for more printing
@@ -95,8 +95,9 @@ typedef struct ServerStr
     bool               online;                           // Bool representing whether or not the server is online
     char               alias[kMaxServerAliasLength + 1]; // used to connect to server without ip
     bool               isRoot;                           // if the connected server is the root server
-    User*              host;                             // Client who requested for server to be created
+    User               host;                             // Client who requested for server to be created
     User**             clientList;                       // List of connected clients. Memory must be allocated first
+    int                serverId;                         // Unique id each server has. Used when two servers have the same name       
 } Server;
 
 /*

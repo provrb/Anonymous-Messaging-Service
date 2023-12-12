@@ -5,7 +5,7 @@
 
 // NOTE: Whenever you see cf, it is a flag to set 
 // client side for the root server to perform that command
-typedef enum CommandFlags
+typedef enum
 {
     k_cfNone = -123, // No Command to perform
 
@@ -35,7 +35,7 @@ typedef enum CommandFlags
  * Different from ResponseCode as ResponseFlags-
  * gives more detailed explanation on what happened with the clients request
  */
-typedef enum ResponseFlags
+typedef enum
 {
     k_rfNoResponse = 1,   // No flags. Default
     k_rfRequestedDataUpdated = 903, // The data was updated somehow.
@@ -51,8 +51,11 @@ typedef enum ResponseFlags
  * After a request is made to it
  * Indicate what happened- is it successful or fail
  */
-typedef enum ResponseCodes
+typedef enum
 {
     k_rcRootOperationSuccessful = 0,    // Normal Success Code.
     k_rcInternalServerError = -192, // Something went wrong on the servers side
+    
+    // Types of errors
+    k_rcErrorPortInUse = -302, // The port client tried to make a server with is in use.
 } ResponseCode;

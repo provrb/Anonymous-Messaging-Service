@@ -16,8 +16,8 @@
  * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  */
 
-#include "hdr/cli.h"
-#include "hdr/client.h"
+#include "Headers/cli.h"
+#include "Headers/client.h"
 
 
 /*
@@ -98,17 +98,16 @@ void SplashScreen() {
  * @retval          success
  */
 void DisplayServers() {
-
     UpdateServerList();
 
     // Print server list header
     SysPrint(UNDR WHT, true, "Server List (%i Online):", onlineServers);
-    printf("  [ID] - [USR/COUNT] : SERVER NAME\n");
+    printf("  [ID] - [USR/COUNT] HOST: '' : NAME: ''\n");
 
     // Print Server List
     for (int servIndex=0; servIndex<onlineServers; servIndex++){
         Server server = serverList[servIndex];
-        printf("\t[%i] - [%i/%i]: %s\n", servIndex+1, server.connectedClients, server.maxClients, server.alias);
+        printf("[%i] - [%i/%i] HOST: %s : NAME: %s\n", server.serverId, server.connectedClients, server.maxClients, server.host.handle, server.alias);
     }
 }
 

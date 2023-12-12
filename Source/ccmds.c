@@ -16,10 +16,10 @@
  * ****************************(C) COPYRIGHT 2023 Blue Bear****************************
  */
 
-#include "hdr/ccmds.h"
-#include "hdr/client.h"
-#include "hdr/server.h"
-#include "hdr/cli.h"
+#include "Headers/ccmds.h"
+#include "Headers/client.h"
+#include "Headers/server.h"
+#include "Headers/cli.h"
 
 // Map of valid commands
 Command validCommands[] = {
