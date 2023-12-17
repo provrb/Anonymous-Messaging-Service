@@ -97,12 +97,12 @@ typedef struct ServerStr
     bool               isRoot;                           // if the connected server is the root server
     User               host;                             // Client who requested for server to be created
     User**             clientList;                       // List of connected clients. Memory must be allocated first
-    int                serverId;                         // Unique id each server has. Used when two servers have the same name       
+    unsigned int       serverId;                         // Unique id each server has. Used when two servers have the same name       
 } Server;
 
 /*
     Info used to create a server in
-    ServerBareMetal thread. Includes the
+    RSServerBareMetal thread. Includes the
     info to create a server and the host
     who wants to make the server.
 */
@@ -153,6 +153,17 @@ void ServerPrint(
 );
 
 /*
+    Generate a completely random
+    server unique identifier
+
+    The 'id' field in 'server' will be automatically
+    changed to the generated ID.
+
+    'UID' in int form will always added
+*/
+uint32_t GenerateServerUID(Server* server);
+
+/*
     Bare bones of creating a server.
     'Server' struct must be casted to void*
     and passed as the 'serverStruct' parameter.
@@ -160,7 +171,7 @@ void ServerPrint(
     All fields in the struct must be completed.
     Recommended to use MakeServer() instead.
 */
-void* ServerBareMetal(
+void* RSServerBareMetal(
     void* serverStruct // Server Struct
 );
 

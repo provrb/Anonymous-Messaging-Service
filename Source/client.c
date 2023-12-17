@@ -41,8 +41,16 @@ ResponseCode MakeServerRequest(
     // Don't received on connected server socket if we left the server
     if (request.command != k_cfKickClientFromServer)
     {
+
+        /*
+            Receive a response from the server as ResponseCode enum
+        */
         int recvBytes = recv(optionalClientMessage.sender->cfd, (void*)&response, sizeof(ResponseCode), 0);
-        // todo: handle situation.. too lazy        
+        if (recvBytes <= 0)
+        {
+            ServerPrint(RED, "Error Making Request");
+            return response;
+        }
     }
     else 
     {
@@ -68,11 +76,22 @@ size_t ClientIndex(const User* arr[], size_t size, User* value)
 void DisconnectClient(){
     // Remove client from root connected clients
 
-    SysPrint(WHT, true, "Disconnecting %s", localClient->handle);
-    // RootResponse response = MakeRootRequest(k_cfDisconnectClientFromRoot, rootServer, *localClient, (CMessage){0});
-    // if (response.rcode = k_rcRootOperationSuccessful){
-    //     SysPrint(GRN, false, "Disconnected. Goodbye");
-    // }
+    SysPrint(WHT, false, "Disconnecting %s. %s", localClient->handle, localClient->connectedServer->alias);
+    
+    /*
+        Make a root request to disconnect the client.
+        Also send the server the clients connected to
+        dereferenced so the server can check if it needs to be
+        shutdown in the case the localClient is the host.
+    */
+    Server temp = *localClient->connectedServer;
+    RootResponse response = MakeRootRequest(k_cfDisconnectClientFromRoot, temp, *localClient, (CMessage){0});
+    if (response.rcode == k_rcRootOperationSuccessful){
+        SysPrint(GRN, false, "Disconnected. Goodbye");
+    }
+
+    close(localClient->cfd);
+    close(localClient->rfd);
 
     exit(EXIT_SUCCESS);
 }
@@ -85,9 +104,6 @@ void LeaveConnectedServer()
                                         );
 
     UpdateServerList();
-    
-    localClient->connectedServer = (Server*){0};
-    localClient->cfd = 0;
 }
 
 void ReceivePeerMessagesOnServer(void* serverInfo)
@@ -163,6 +179,8 @@ void ReceivePeerMessagesOnServer(void* serverInfo)
  * @retval          Nothing.
  */
 void* HandleClientInput(){
+    localClient->connectedServer = &rootServer;
+
     while (1) {
         char cmd[100];
         bool validCmd = false;
@@ -408,6 +426,7 @@ int ConnectToRootServer() {
     if (resp.rcode == k_rcRootOperationSuccessful && resp.rflag == k_rfRequestedDataUpdated)
     {
         localClient->rfd = rootServer.sfd;
+        localClient->connectedServer = &rootServer;
 
         // Success
         return 0;

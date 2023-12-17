@@ -14,7 +14,7 @@ typedef enum
     k_cfRemoveServer = -10, // Remove server from explorer
     k_cfRequestServerList = 100, // Get all updated server list
     k_cfMakeNewServer = 920, // Create a new server clients can connect to
-    k_cfUpdateServerWithNewINfo = 892, // A server has updated info to be pushed onto the root server
+    k_cfRSUpdateServerWithNewInfo = 892, // A server has updated info to be pushed onto the root server
 
     // Commands regarding client
     k_cfDisconnectClientFromRoot = 914, // Remove client from root server
@@ -22,6 +22,7 @@ typedef enum
     k_cfBanClientFromServer = 482, // Ban a client from the server. Must be host
     k_cfKickClientFromServer = 423, // Remove client from the server. Must be host
     k_cfAddClientToServer = 10023, // Add client to server list
+    k_cfSSUpdateClientWithNewInfo = 122, // Update client in rootConnectedClients
 
     // Message command
     k_cfEchoClientMessageInServer  = 1840, // Send message from client to all clients in server 

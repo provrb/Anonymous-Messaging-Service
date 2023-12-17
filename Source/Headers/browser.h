@@ -38,7 +38,7 @@ extern Server       serverList[kMaxServersOnline]; // List of all online servers
     All information about the server will be copied
     and saved into the list.
 */
-int AddServerToList(Server server);
+int SSAddServerToList(Server server);
 
 /*
     Update the server list client-side.

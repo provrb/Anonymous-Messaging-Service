@@ -17,6 +17,7 @@
  */
 
 #include "Headers/tools.h"
+#include <stdlib.h>
 
 /**
  * @brief           get gmt time
@@ -32,17 +33,6 @@ struct tm* gmt() {
 }
 
 /**
- * @brief           get gmt time from a time_t variable
- * @param[in]       now: time_t to get a tm* struct from
- * @return          struct tm*
- * @retval         gmt time of the 'now' param
- */
-struct tm* gmt_from_time_t(time_t now) {
-    struct tm* timestr = gmtime(&now);
-    return timestr;
-}
-
-/**
  * @brief           Return a string as all lowercase
  * @param[in,out]   str: the string to fully lowercase
  * @retval         all lowercased string
@@ -51,15 +41,4 @@ void toLowerCase(char* str){
     for (int i = 0; str[i]; i++) {
         str[i] = tolower((unsigned char)str[i]);
     }
-}
-
-/**
- * @brief           Generate a random integar
- * @param[in]       index: seed/number to randomize
- * @return          unsigned long
- * @retval          randomized number
- */
-unsigned long randint(unsigned long index){
-    index = (index << 13) ^ index;
-    return ((index * (index * index * 15731 + 789221) + 1376312589) & 0x7fffffff);
 }

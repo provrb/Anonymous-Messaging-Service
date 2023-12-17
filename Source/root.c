@@ -26,7 +26,20 @@ unsigned int onlineGlobalClients = 0; // All clients connected to the root serve
 User   rootConnectedClients[] = {};  // List of all clients on the root server
 Server rootServer = { 0 };          // Root server info
 
-void UpdateServerWithNewInfo(Server* updatedServerInfo)
+void SSUpdateClientWithNewInfo(User updatedUserInfo)
+{
+    // Iterate through rootConnectedClients list to find the client to update
+    for (size_t i = 0; i < onlineGlobalClients; i++)
+    {
+        if (strcmp(rootConnectedClients[i].handle, updatedUserInfo.handle) == 0) 
+        {
+            rootConnectedClients[i] = updatedUserInfo;
+            break;
+        }
+    }
+}
+
+void RSUpdateServerWithNewInfo(Server* updatedServerInfo)
 {
     // Iterate through server list to find the server to update
     for (size_t i = 0; i < onlineServers; i++)
@@ -39,7 +52,6 @@ void UpdateServerWithNewInfo(Server* updatedServerInfo)
             break;
         }
     }
-
     // Now the server should be updated in the serverList
 }
 
@@ -78,7 +90,7 @@ void UpdateClientInConnectedServer(User* userToUpdate)
         server->clientList[i] = tmpArray[i];
 
     // Finally take changes into affect and update this server on the root server
-    UpdateServerWithNewInfo(server);
+    RSUpdateServerWithNewInfo(server);
 }
 
 /**
@@ -130,6 +142,8 @@ RootResponse MakeRootRequest(
     // where we may need to send or recv more than once
     switch (request.cmdFlag)
     {
+    case k_cfMakeNewServer:
+        break;
     case k_cfRequestServerList: // Need to receive all servers individually
     {
         // Receive the number of online servers
@@ -179,7 +193,7 @@ ResponseCode DoRootRequest(void* req)
     switch (request.cmdFlag)
     {
     case k_cfRequestServerList: // Client wants to know the updated server list 
-        RespondToRootRequestMaker(&request.user, response);
+        RSRespondToRootRequestMaker(&request.user, response);
 
         // First send the amount of online servers as an int
         uint32_t nlOnlineServers = htonl(onlineServers); // htonl version of onlineServers int
@@ -197,9 +211,9 @@ ResponseCode DoRootRequest(void* req)
 
         break;
     case k_cfAppendServer: // Add server to server list
-        AddServerToList(request.server);
+        SSAddServerToList(request.server);
         response.rflag = k_rfNoValueReturnedFromRequest;
-        RespondToRootRequestMaker(&request.user, response);
+        RSRespondToRootRequestMaker(&request.user, response);
         break;
     case k_cfRemoveServer: // Remove server from server list
         int index = -1;
@@ -217,7 +231,7 @@ ResponseCode DoRootRequest(void* req)
         
         onlineServers--;
         // Server list now removed
-        RespondToRootRequestMaker(&request.user, response);
+        RSRespondToRootRequestMaker(&request.user, response);
         break;
     case k_cfMakeNewServer: // Make new server and run it
         // Index will be the port hashed by max servers allowed online
@@ -232,7 +246,7 @@ ResponseCode DoRootRequest(void* req)
             response.rcode = k_rcErrorPortInUse;
             response.returnValue = (void*)request.server.port;
             response.rflag = k_rfSentDataWasUnused;
-            RespondToRootRequestMaker(&request.user, response);
+            RSRespondToRootRequestMaker(&request.user, response);
             break;
         }
 
@@ -246,20 +260,25 @@ ResponseCode DoRootRequest(void* req)
         creationInfo.serverInfo = &request.server;
         creationInfo.clientAKAhost = &request.user;
 
-        if (pthread_create(&pid, NULL, ServerBareMetal, (void*)&creationInfo) != 0)
+        if (pthread_create(&pid, NULL, RSServerBareMetal, (void*)&creationInfo) != 0)
             SysPrint(RED, true, "***** FATAL ERROR: Failed to Make Thread for Server. Errno %i. Aborting.", errno);
 
         break;
     // pthread_exit(NULL);
     case k_cfDisconnectClientFromRoot:
-        DisconnectClientFromRootServer(&request.user);
-        break;
-    // TODO: Handle situation server sided
+        RSDisconnectClientFromRootServer(request.user);
+        return k_rcRootOperationSuccessful;
     case k_cfKickClientFromServer:
-        DisconnectClientFromServer(&request.user);
+        SSDisconnectClientFromServer(&request.user);
         break;
-    case k_cfUpdateServerWithNewINfo:
-        UpdateServerWithNewInfo(&request.server);
+    case k_cfRSUpdateServerWithNewInfo:
+        RSUpdateServerWithNewInfo(&request.server);
+        break;
+    case k_cfSSUpdateClientWithNewInfo:
+        request.user.connectedServer = &request.server;
+        SSUpdateClientWithNewInfo(request.user);
+        response.rflag = k_rfRequestedDataUpdated;
+        RSRespondToRootRequestMaker(&request.user, response);
         break;
     default:
         return k_rcInternalServerError; // LIkely the command doesnt exist
@@ -271,13 +290,15 @@ ResponseCode DoRootRequest(void* req)
 void* AcceptClientsToRoot() {
     pthread_t clientThreads[kMaxGlobalClients]; // all active threads
     int activeClientThreads = 0; // The number of active client threads
-
+    Server rootServerBackup = rootServer;
+    
     while (1) {
         // Make sure onlineGlobalClients does not exceed max allowed clients
         if (onlineGlobalClients + 1 >= kMaxGlobalClients)
             continue;
-        int cfd = accept(rootServer.sfd, (struct sockaddr*)NULL, NULL);
-        
+
+        int cfd = accept(rootServerBackup.sfd, (struct sockaddr*)NULL, NULL);
+
         if (cfd < 0) // Bad client file descriptor.
             continue;
 
@@ -325,6 +346,8 @@ void* AcceptClientsToRoot() {
                 printf("Failed to create thread for client\n");
                 continue;
             }
+            
+            rootServer = rootServerBackup;
 
             activeClientThreads++;
         }
@@ -350,21 +373,32 @@ void* PerformRootRequestFromClient(void* client) {
         {
             SysPrint(RED, false, "Failed to Receive Message");
             continue;
-        } 
+        }
         else if (receivedBytes == 0)
         {
-            SysPrint(WHT, false, "Client '%s' Disconnected From the Server", connectedClient->handle);
-            DisconnectClientFromRootServer(connectedClient);
+            RSDisconnectClientFromRootServer(receivedRequest.user);
             break;
         }
-
-        receivedRequest.user = *connectedClient;
 
         // No command to perform
         if (receivedRequest.cmdFlag == k_cfNone)
             continue;
 
+        if (receivedRequest.cmdFlag != k_cfDisconnectClientFromRoot)
+            receivedRequest.user = *connectedClient;
+        else
+        {
+            receivedRequest.user.connectedServer = &receivedRequest.server;
+            // disconnect user
+            RSDisconnectClientFromRootServer(receivedRequest.user);
+            break;
+        }
+        
         ResponseCode result = DoRootRequest((void*)&receivedRequest);
+        if (receivedRequest.cmdFlag == k_cfDisconnectClientFromRoot)
+        {
+            break;
+        }
 
         if (result != k_rcRootOperationSuccessful) 
         {
@@ -376,7 +410,7 @@ void* PerformRootRequestFromClient(void* client) {
     pthread_exit(NULL);
 } 
 
-void RespondToRootRequestMaker(User* to, RootResponse response) {
+void RSRespondToRootRequestMaker(User* to, RootResponse response) {
     fprintf(stderr, CYN "[AMS] Response to Client '%s' ", to->handle);
     int snd = sendto(to->rfd, (void*)&response, sizeof(response), MSG_NOSIGNAL, (struct sockaddr*)&to->addressInfo, sizeof(to->addressInfo));
     
@@ -386,13 +420,16 @@ void RespondToRootRequestMaker(User* to, RootResponse response) {
         printf(GRN "Good\n" RESET);
 }
 
-void DisconnectClientFromRootServer(User* usr) {
+void RSDisconnectClientFromRootServer(User usr) {
     int index = 0;
+
+    close(usr.cfd);
+    close(usr.rfd);
 
     // Get index where client is on the root connected clients arra    
     for (int i = 0; i < onlineGlobalClients; i++){
         // Is the user we want equal to the user in the list at the index 'i'
-        if (strcmp(rootConnectedClients[i].handle, usr->handle) == 0)
+        if (strcmp(rootConnectedClients[i].handle, usr.handle) == 0)
             index = i;
     }
 
@@ -400,23 +437,14 @@ void DisconnectClientFromRootServer(User* usr) {
     for (int i = index; i < onlineGlobalClients - 1; i++) 
         rootConnectedClients[i] = rootConnectedClients[i + 1]; 
 
+
     // Check if client is connected to server
     // If client is, update the server statistics
-    if (usr->connectedServer->online) {
-        // Get index of client where it is on the connected servers client list array
-        for (int i = 0; i < usr->connectedServer->connectedClients; i++){
-            if (strcmp(usr->handle, usr->connectedServer->clientList[i]->handle) == 0)
-                // REMOVE CLIENT FROM THE SERVERS CLIENT LIST
-                index = i;
+    if (!usr.connectedServer->isRoot) {
+        if (IsUserHost(usr, usr.connectedServer))
+        {
+            ShutdownServer(usr.connectedServer);
         }
-
-        // remove client from connected server client list by shifting array
-        // Decrease connected clients 
-        for (int i = index; i < usr->connectedServer->connectedClients - 1; i++) 
-            usr->connectedServer->clientList[i] = usr->connectedServer->clientList[i + 1]; 
-
-        if (IsUserHost(*usr, usr->connectedServer))
-            ShutdownServer(usr->connectedServer);
     }
 
     // Remove 1 client from connected client count
@@ -440,6 +468,7 @@ int CreateRootServer() {
     rootServer.maxClients = -1; // Infinite connections
     rootServer.isRoot     = true;
     strcpy(rootServer.alias, "__root__");
+
     printf("Done\n");
 
     printf("Creating socket for the server... ");
@@ -488,7 +517,7 @@ int CreateRootServer() {
 }
 
 
-void DisconnectClientFromServer(User* user) {
+void SSDisconnectClientFromServer(User* user) {
     Server* server = user->connectedServer;
 
     // get index of client in server client list
@@ -508,10 +537,15 @@ void DisconnectClientFromServer(User* user) {
     
     // Update server with new info since 
     // the client list and connectedClients has been updated
-    UpdateServerWithNewInfo(server);
+    RSUpdateServerWithNewInfo(server);
 
     if (IsUserHost(*user, server))
     {
         ShutdownServer(server);
     }
+
+    user->connectedServer = &rootServer;
+    printf("Now the user is connected to %s\n", user->connectedServer->alias);
+    SSUpdateClientWithNewInfo(*user);
+
 }

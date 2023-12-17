@@ -73,6 +73,16 @@ extern User rootConnectedClients[];
 */
 extern Server rootServer;
 
+/*
+    Find client struct in rootConnectedClients array
+    and replace it with updated info.
+
+    Update a client who is in the rootConnectedClient
+    array with new info, in particular: 'updatedUserInfo'
+    provided as the function arguments.
+*/
+void SSUpdateClientWithNewInfo(User updatedUserInfo);
+
 /* 
     Make a request to the root server.
 
@@ -136,7 +146,7 @@ int CreateRootServer();
     decrement onlineGlobalClients by one,
     and shutdown any servers the user made.
 */
-void DisconnectClientFromRootServer(User* user); 
+void RSDisconnectClientFromRootServer(User user); 
 
 /*
     Disconnect 'user' from the server in connectedServer field.
@@ -146,7 +156,7 @@ void DisconnectClientFromRootServer(User* user);
     Otherwise, update the statistics of the server
     like connectedClients appropriately
 */
-void DisconnectClientFromServer(User* user);
+void SSDisconnectClientFromServer(User* user);
 
 /*
     Respond to a client who made a root request.
@@ -154,7 +164,7 @@ void DisconnectClientFromServer(User* user);
     Send a struct 'RootResponse' to give information
     or return values on their request that happened server-sided.
 */
-void RespondToRootRequestMaker(User* to, RootResponse response);
+void RSRespondToRootRequestMaker(User* to, RootResponse response);
 
 /*
     Update a server in serverList with 'updatedServerInfo'
@@ -162,6 +172,6 @@ void RespondToRootRequestMaker(User* to, RootResponse response);
     Gets the index of the server by searching names in serverList
     and replaces the 'Server' struct at that index with 'updatedServerInfo'
 */
-void UpdateServerWithNewInfo(Server* updatedServerInfo);
+void RSUpdateServerWithNewInfo(Server* updatedServerInfo);
 
 #endif // __ROOT_H__

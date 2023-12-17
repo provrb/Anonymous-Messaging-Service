@@ -55,12 +55,11 @@ Server* ServerFromAlias(char* alias) {
     if (foundServers > 1)
     {
         // Ask user which to choose
-        printf(UNDR "Choose Between These %i Servers\n" RESET, foundServers);
+        SysPrint(UNDR, true, "Choose Between These %i Servers", foundServers);
         duplicateNames = true;
         Server* server = NULL;
 
-        // TODO: FIX
-        for (int i = 0; i < foundServers; i++)
+        for (int i = 1; i < foundServers + 1; i++)
         {
             server = sarr[i];
             printf("%i: [%i/%i] Host: %s - Server Name: %s\n", i, server->connectedClients, server->maxClients, server->host.handle, server->alias);
@@ -82,12 +81,19 @@ Server* ServerFromAlias(char* alias) {
             if (atoi(option) <= foundServers)
             {
                 foundServer = sarr[atoi(option)];
+                
+
                 break;
             }
         }
     }
 
     return foundServer;
+}
+
+bool IsValidFileDescriptor(unsigned int fileDescriptor)
+{
+    return (fcntl(fileDescriptor, F_GETFD) != -1);
 }
 
 /**
@@ -105,8 +111,6 @@ Server* ServerFromAlias(char* alias) {
 
 void ExitApp(){ 
     DisconnectClient();
-    SysPrint(CYN, true, "Exiting Application.");
-    exit(EXIT_SUCCESS); 
 }
 
 /**
@@ -129,21 +133,39 @@ void* JoinServer(Server* server) {
         return;
     }
 
-    localClient->addressInfo = server->addr;
-    localClient->cfd = cfd;
-    localClient->connectedServer = server;
-
-    printf("about to enter chat room: %s\n", localClient->handle);
+    /*
+        Pass dereference local client to the server
+        we are joining to ask them to add us to the
+        client list and return updated information
+        about the server were connecting to
+    */
     User dereferenceClient = *localClient;
+    dereferenceClient.cfd = cfd;
+    dereferenceClient.addressInfo = server->addr;
+    dereferenceClient.connectedServer = server;
 
     // Send client info to server you're joining
     int sentBytes = send(cfd, (void*)&dereferenceClient, sizeof(dereferenceClient), 0);
-    
-    // TODO: HANDLE SITUATIONS THAT SEND BREAKS
+    if (sentBytes <= 0)
+    {
+        SysPrint(RED, true, "Error Sending Client Info To Server. Error %i", errno);
+        return;
+    }
 
     // Receive most updated server info
     Server updatedServer = {0};
     int recvBytes = recv(cfd, (void*)&updatedServer, sizeof(Server), 0);
+    if (recvBytes <= 0)
+    {
+        SysPrint(RED, true, "Error Receiving Client Info From Server. Error %i", errno);
+        return;
+    }
+
+    /*
+        Update localClient struct.
+    */
+    localClient->addressInfo = server->addr;
+    localClient->cfd = cfd;
     localClient->connectedServer = &updatedServer;
 
     Chatroom(&updatedServer);

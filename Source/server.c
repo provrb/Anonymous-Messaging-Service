@@ -90,7 +90,7 @@ void* ServerAcceptThread(void* serverInfo)
 
     int lstn = listen(server->sfd, server->maxClients);
     if (lstn < 0) {
-        printf("listen: errno %i\n", errno);
+        ServerPrint(RED, "Error Listening on Server %s", server->alias);
         close(server->sfd);
         return;
     }
@@ -105,8 +105,6 @@ void* ServerAcceptThread(void* serverInfo)
         cfd = accept(dereferencedServer.sfd, NULL, NULL);
 
         if (cfd < 0) {
-            // printf("accept: errno %i\n", errno);
-            // close(server->sfd);
             continue;
         }
 
@@ -118,22 +116,42 @@ void* ServerAcceptThread(void* serverInfo)
         else if (clientInfo == 0) // client disconnected
             break;
 
+        /*
+            Update the servers client list and since its dereferenced we 
+            dont have to worry about putting inaccurate information
+            in the actual server.
+        */
         dereferencedServer.clientList[dereferencedServer.connectedClients] = &receivedUserInfo;
         dereferencedServer.connectedClients++;
 
-        receivedUserInfo.cfd = cfd;
+        /*
+            Update the clients connection info
+        */
+        receivedUserInfo.cfd             = cfd;
         receivedUserInfo.connectedServer = &dereferencedServer;
-
-        pthread_t tid;
-        pthread_create(&tid, NULL, ListenForRequestsOnServer, (void*)&dereferencedServer);
 
         // Send the server info
         int sentServerInfo = send(cfd, (void*)&dereferencedServer, sizeof(dereferencedServer), 0);
-
-        // TODO: handle situation where send fails
+        if (sentServerInfo <= 0) // Error sending info
+            break;
+        
+        pthread_t tid;
+        if (pthread_create(&tid, NULL, ListenForRequestsOnServer, (void*)&dereferencedServer) != 0)
+            break;
     }
 
     pthread_exit(NULL);
+}
+
+uint32_t GenerateServerUID(Server* server)
+{
+    // seed rand with the server name in int and port and address of serverAddr
+    srand((unsigned int)server->alias ^ server->port ^ (unsigned int)(void*)&server->addr);
+
+    uint32_t uid = (unsigned int)"UID" + (unsigned int)rand();
+    server->serverId = uid;
+    
+    return uid;
 }
 
 /**
@@ -141,7 +159,7 @@ void* ServerAcceptThread(void* serverInfo)
  * @param[in]       serverArgsStruct: Thread_AcceptArgs struct with parameters
  * @return          void*
  */
-void* ServerBareMetal(void* serverStruct)
+void* RSServerBareMetal(void* serverStruct)
 {
 
     /* 
@@ -155,7 +173,7 @@ void* ServerBareMetal(void* serverStruct)
     RootResponse response;
     memset(&response, 0, sizeof(RootResponse));
     response.rcode       = k_rcInternalServerError;
-    response.returnValue = NULL;
+    response.returnValue = (void*)serverInfo;
     response.rflag       = k_rfSentDataWasUnused;
 
     if (serverInfo->maxClients > kMaxServerMembers){
@@ -174,7 +192,7 @@ void* ServerBareMetal(void* serverStruct)
     int sfd = socket(serverInfo->domain, serverInfo->type, 0);
     if (sfd == -1) {
         ServerPrint(RED, "[ERROR]: Failed Creating Socket. Error Code %i", errno);
-        RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
+        RSRespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
     
@@ -188,7 +206,7 @@ void* ServerBareMetal(void* serverStruct)
     int set = setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &optVal, sizeof(optVal));
     if (set < 0) {
         ServerPrint(RED, "setsockopt() for SO_REUSEADDR failed. Maybe port is in use.");
-        RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
+        RSRespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
 
@@ -196,7 +214,7 @@ void* ServerBareMetal(void* serverStruct)
     int bnd = bind(sfd, (struct sockaddr * )&addrInfo, sizeof(addrInfo));
     if (bnd == -1) {
         ServerPrint(RED, "[ERROR]: Failed Binding Socket. Error Code %d", errno);
-        RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
+        RSRespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
 
@@ -204,35 +222,40 @@ void* ServerBareMetal(void* serverStruct)
     int lsn = listen(sfd, serverInfo->maxClients);
     if (lsn == -1) {
         ServerPrint(RED, "[ERROR]: Error while listening. Error Code %d", errno);
-        RespondToRootRequestMaker(creationInfo->clientAKAhost, response);
+        RSRespondToRootRequestMaker(creationInfo->clientAKAhost, response);
         goto server_close;
     }
 
     /* Server online, fill in rest of info */
     User hostCopy = *creationInfo->clientAKAhost;
 
-    serverInfo->serverId   = randint(1092);
+    GenerateServerUID(serverInfo);
     serverInfo->connectedClients = 0;
-    serverInfo->host       = hostCopy;
-    serverInfo->domain     = creationInfo->serverInfo->domain;
-    serverInfo->isRoot     = false;
-    serverInfo->port       = serverInfo->port;
-    serverInfo->type       = serverInfo->type;
-    serverInfo->maxClients = creationInfo->serverInfo->maxClients;
-    serverInfo->sfd        = sfd;
-    serverInfo->addr       = addrInfo;
-    serverInfo->online     = true; // True. Server online and ready
-    serverInfo->clientList = (User**)malloc(sizeof(User*) * serverInfo->maxClients); // Allocate memory for the servers client list
+    serverInfo->host             = hostCopy;
+    serverInfo->domain           = creationInfo->serverInfo->domain;
+    serverInfo->isRoot           = false;
+    serverInfo->port             = serverInfo->port;
+    serverInfo->type             = serverInfo->type;
+    serverInfo->maxClients       = creationInfo->serverInfo->maxClients;
+    serverInfo->sfd              = sfd;
+    serverInfo->addr             = addrInfo;
+    serverInfo->online           = true; // True. Server online and ready
+    serverInfo->clientList       = (User**)malloc(sizeof(User*) * serverInfo->maxClients); // Allocate memory for the servers client list
     strcpy(serverInfo->alias, creationInfo->serverInfo->alias);
     
     // add server to server list
     serverList[onlineServers++] = *serverInfo;
 
     // respond to host telling them their server was made
-    response.rcode = k_rcRootOperationSuccessful;
-    response.returnValue = NULL;
-    response.rflag = k_rfRequestedDataUpdated;
-    RespondToRootRequestMaker(&serverInfo->host, response);
+    // update their client info server sided
+    
+    hostCopy.connectedServer = serverInfo;
+    SSUpdateClientWithNewInfo(hostCopy);
+
+    response.rcode       = k_rcRootOperationSuccessful;
+    response.returnValue = (const void*)serverInfo;
+    response.rflag       = k_rfRequestedDataUpdated;
+    RSRespondToRootRequestMaker(&serverInfo->host, response);
 
     pthread_t tid;
     pthread_create(&tid, NULL, ServerAcceptThread, (void*)serverInfo);
@@ -246,7 +269,7 @@ server_close:
 }
 
 /** 
- * @brief           Wrapper for ServerBareMetal()
+ * @brief           Wrapper for RSServerBareMetal()
  * @param[in]       domain:     Domain for the socket
  * @param[in]       type:       Type of the socket
  * @param[in]       protocol:   Protocol for the socket
@@ -319,12 +342,18 @@ int MakeServer(
     serv.port       = port;
     serv.maxClients = maxClients;
     serv.isRoot     = false;
+    serv.host       = *localClient;
     strcpy(serv.alias, alias);
     
+    printf("host: %s\n", serv.host.handle);
+
     // Tell root server to host a server
     RootResponse response = MakeRootRequest(k_cfMakeNewServer, serv, *localClient, (CMessage){0});
-    if (response.rcode == k_rcRootOperationSuccessful)
+    if (response.rcode == k_rcRootOperationSuccessful) 
+    {
+        localClient->connectedServer = &serv;
         SysPrint(CYN, false, "Server '%s' Created on Port '%i'\n", serv.alias, serv.port);
+    }
     else if (response.rcode == k_rcInternalServerError && response.returnValue == (void*)serv.port)
         // Port in use error
         SysPrint(YEL, false, "[WARNING]: Port Already In Use. Choose a Different Port. (%i)\n", serv.port);
@@ -354,7 +383,7 @@ void ShutdownServer(Server* server)
 
     printf("Disconnecting all clients from server... ");
     for (int cl_index=0; cl_index<server->connectedClients; cl_index++)
-    {-
+    {
         close(server->clientList[cl_index]->cfd);
         memset(server->clientList[cl_index]->connectedServer, 0, sizeof(Server));
     }
@@ -408,7 +437,8 @@ ResponseCode DoServerRequest(ServerRequest request)
     switch (request.command)
     {
     case k_cfKickClientFromServer:
-        DisconnectClientFromServer(&sender);
+        SSDisconnectClientFromServer(&sender);
+        sender.connectedServer = &rootServer;
         break;
     case k_cfEchoClientMessageInServer:
         Server* connectedServer = sender.connectedServer;
@@ -430,7 +460,11 @@ ResponseCode DoServerRequest(ServerRequest request)
 
         // Send the response status back to the user
         int sent = send(sender.cfd, (void*)&responseStatus, sizeof(responseStatus), 0);
-        // todo: handle error situtations
+        if (sent <= 0)
+        {
+            SSDisconnectClientFromServer(&sender);
+            return;
+        }
 
         break;
     default:

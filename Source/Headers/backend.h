@@ -22,6 +22,7 @@
 #include <string.h>          
 #include <stdio.h>
 #include <ctype.h>
+#include <fcntl.h>
 #include "cli.h"
 #include "server.h"
 #include "tools.h"
@@ -34,6 +35,14 @@
     Otherwise, a pointer to that 'Server' struct will be returned.
 */
 Server* ServerFromAlias(char* alias);
+
+
+/*
+    Check if a linux socket file descriptor
+    is valid. Returns true if its valid, else
+    return false.
+*/
+bool IsValidFileDescriptor(unsigned int fileDescriptor);
 
 /*
     Exit the client application.

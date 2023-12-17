@@ -27,7 +27,7 @@ Server       serverList[kMaxServersOnline] = {0};
  * @return          int
  * @retval          success or failure
  */
-int AddServerToList(Server server) {
+int SSAddServerToList(Server server) {
     if (server.online == false){
         printf("ERROR: Cannot add offline server to list");
         return -1;

@@ -182,6 +182,10 @@ int Chatroom(Server* server) {
         printf("msg> "); // message prompt
         fgets(message, kMaxClientMessageLength, stdin);
         DisableTerminalInput();
+        
+        printf("\x1b[1A");
+        printf("\x1b[2K");
+        printf("\r");
 
         // Remove the trailing newline character if it exists
         if (message[strlen(message) - 1] == '\n') {
@@ -204,10 +208,6 @@ int Chatroom(Server* server) {
         
         ResponseCode requestStatus = MakeServerRequest(k_cfEchoClientMessageInServer, *localClient, cmsg);
         
-        printf("\x1b[1A");
-        printf("\x1b[2K");
-        printf("\r");
-        
         if (requestStatus == k_rcInternalServerError)
             printf(RED "Failed to Send Message.\n" RESET);
         else
@@ -216,6 +216,9 @@ int Chatroom(Server* server) {
         sleep(1);
     }
 
+    // We leave the connected server so default the
+    // localcients 'connectedServer' field to the rootServer again
+    localClient->connectedServer = &rootServer;
     ClearOutput();
     SysPrint(CYN, false, "Disconnected From the Server '%s'", server->alias);
     SplashScreen();
